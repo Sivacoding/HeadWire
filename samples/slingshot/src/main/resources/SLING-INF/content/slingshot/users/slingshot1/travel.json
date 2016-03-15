@@ -1,6 +1,6 @@
 {
     "jcr:primaryType":"sling:Folder",
     "sling:resourceType":"slingshot/Category",
-    "title":"Places",
-    "description":"Mysterious places around the globe."
+    "title":"Travel",
+    "description":"Stuff related to travel."
 }
