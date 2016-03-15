@@ -28,13 +28,14 @@ import org.osgi.framework.BundleContext;
  */
 public class ResourceProviderHandler implements Comparable<ResourceProviderHandler>, Pathable {
 
-    private final ResourceProviderInfo info;
+    private volatile ResourceProviderInfo info;
 
-    private final BundleContext bundleContext;
+    private volatile BundleContext bundleContext;
 
-    private volatile ResourceProvider<?> provider;
+    private volatile ProviderContextImpl context = new ProviderContextImpl();
 
-    private final ProviderContextImpl context = new ProviderContextImpl();
+    private volatile ResourceProvider<Object> provider;
+
 
     public ResourceProviderHandler(final BundleContext bc, final ResourceProviderInfo info) {
         this.info = info;
@@ -45,15 +46,25 @@ public class ResourceProviderHandler implements Comparable<ResourceProviderHandl
         return this.info;
     }
 
+    @SuppressWarnings("unchecked")
     public boolean activate() {
-        this.provider = (ResourceProvider<?>) this.bundleContext.getService(this.info.getServiceReference());
+        this.provider = (ResourceProvider<Object>) this.bundleContext.getService(this.info.getServiceReference());
         if ( this.provider != null ) {
             this.provider.start(context);
         }
         return this.provider != null;
     }
 
-    public ResourceProvider<?> getResourceProvider() {
+    /**C
+     * Clear all references.
+     */
+    public void dispose() {
+        this.info = null;
+        this.bundleContext = null;
+        this.context = null;
+    }
+
+    public ResourceProvider<Object> getResourceProvider() {
         return this.provider;
     }
 
@@ -68,6 +79,15 @@ public class ResourceProviderHandler implements Comparable<ResourceProviderHandl
 
     @Override
     public int compareTo(final ResourceProviderHandler o) {
+        if ( this.getInfo() == null ) {
+            if ( o.getInfo() == null ) {
+                return 0;
+            }
+            return 1;
+        }
+        if ( o.getInfo() == null ) {
+            return -1;
+        }
         return this.getInfo().compareTo(o.getInfo());
     }
 
@@ -84,5 +104,10 @@ public class ResourceProviderHandler implements Comparable<ResourceProviderHandl
 
     public ProviderContextImpl getProviderContext() {
         return this.context;
+    }
+
+    @Override
+    public String toString() {
+        return "[" + getClass().getSimpleName() +"# provider: " + provider + " ]";
     }
 }

@@ -66,18 +66,18 @@ public class JobHandlingDistributionQueue implements DistributionQueue {
         return name;
     }
 
-    public boolean add(@Nonnull DistributionQueueItem item) {
-        boolean result = true;
+    public DistributionQueueEntry add(@Nonnull DistributionQueueItem item) {
         try {
             Map<String, Object> properties = JobHandlingUtils.createFullProperties(item);
 
             Job job = jobManager.createJob(topic).properties(properties).add();
-            log.info("job {} added", job.getId());
+            log.debug("job {} added for item {}", job.getId(), item.getId());
+
+            return JobHandlingUtils.getEntry(job);
         } catch (Exception e) {
             log.error("could not add an item to the queue", e);
-            result = false;
+            return null;
         }
-        return result;
     }
 
 
@@ -99,7 +99,7 @@ public class JobHandlingDistributionQueue implements DistributionQueue {
         List<Job> jobs = getJobs(0, 1);
         if (jobs.size() > 0) {
             Job firstItem = jobs.get(0);
-            log.info("first item in the queue is {}, retried {} times", firstItem.getId(), firstItem.getRetryCount());
+            log.debug("first item in the queue is {}, retried {} times", firstItem.getId(), firstItem.getRetryCount());
             return firstItem;
         }
         return null;
@@ -177,7 +177,7 @@ public class JobHandlingDistributionQueue implements DistributionQueue {
             removed = jobManager.removeJobById(job.getId());
         }
 
-        log.info("item with id {} removed from the queue: {}", id, removed);
+        log.debug("item with id {} removed from the queue: {}", id, removed);
         return entry;
     }
 
@@ -193,7 +193,7 @@ public class JobHandlingDistributionQueue implements DistributionQueue {
 
         DistributionQueueState state = DistributionQueueUtils.calculateState(firstItem, firstItemStatus);
         if (!isActive) {
-            state = DistributionQueueState.PAUSED;
+            state = DistributionQueueState.PASSIVE;
         }
 
         int itemsCount = jobs.size();

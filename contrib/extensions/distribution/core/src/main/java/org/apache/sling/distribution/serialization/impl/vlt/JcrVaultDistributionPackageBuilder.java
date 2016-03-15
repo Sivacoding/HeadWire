@@ -27,6 +27,7 @@ import javax.jcr.Session;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Properties;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -35,7 +36,6 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.jackrabbit.commons.JcrUtils;
 import org.apache.jackrabbit.vault.fs.api.ImportMode;
-import org.apache.jackrabbit.vault.fs.api.PathFilterSet;
 import org.apache.jackrabbit.vault.fs.api.WorkspaceFilter;
 import org.apache.jackrabbit.vault.fs.io.AccessControlHandling;
 import org.apache.jackrabbit.vault.fs.io.ImportOptions;
@@ -48,7 +48,7 @@ import org.apache.jackrabbit.vault.packaging.Packaging;
 import org.apache.jackrabbit.vault.packaging.VaultPackage;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
 import org.apache.sling.distribution.serialization.impl.AbstractDistributionPackage;
@@ -70,14 +70,17 @@ public class JcrVaultDistributionPackageBuilder extends AbstractDistributionPack
     private static final String PACKAGE_GROUP = "sling/distribution";
 
     private final Packaging packaging;
-    private ImportMode importMode;
-    private AccessControlHandling aclHandling;
+    private final ImportMode importMode;
+    private final AccessControlHandling aclHandling;
     private final String[] packageRoots;
     private final String tempPackagesNode;
     private final File tempDirectory;
-    private final TreeMap<String, PathFilterSet> filters;
+    private final TreeMap<String, List<String>> filters;
+    private final boolean useBinaryReferences;
 
-    public JcrVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling, String[] packageRoots, String[] filterRules, String tempFilesFolder) {
+    private final Object repolock = new Object();
+
+    public JcrVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling, String[] packageRoots, String[] filterRules, String tempFilesFolder, boolean useBinaryReferences) {
         super(type);
 
         this.packaging = packaging;
@@ -85,10 +88,11 @@ public class JcrVaultDistributionPackageBuilder extends AbstractDistributionPack
         this.importMode = importMode;
         this.aclHandling = aclHandling;
         this.packageRoots = packageRoots;
-        this.tempPackagesNode = AbstractDistributionPackage.PACKAGES_ROOT + "/" + type + "/data";
+        this.tempPackagesNode = type + "/data";
 
         this.tempDirectory = VltUtils.getTempFolder(tempFilesFolder);
         this.filters = VltUtils.parseFilters(filterRules);
+        this.useBinaryReferences = useBinaryReferences;
     }
 
     @Override
@@ -104,7 +108,7 @@ public class JcrVaultDistributionPackageBuilder extends AbstractDistributionPack
             String packageName = getType() + "_" + System.currentTimeMillis() + "_" + UUID.randomUUID();
 
             WorkspaceFilter filter = VltUtils.createFilter(request, filters);
-            ExportOptions opts = VltUtils.getExportOptions(filter, packageRoots, packageGroup, packageName, VERSION);
+            ExportOptions opts = VltUtils.getExportOptions(filter, packageRoots, packageGroup, packageName, VERSION, useBinaryReferences);
 
             log.debug("assembling package {} user {}", packageGroup + '/' + packageName + "-" + VERSION, resourceResolver.getUserID());
 
@@ -150,8 +154,7 @@ public class JcrVaultDistributionPackageBuilder extends AbstractDistributionPack
         try {
             session = getSession(resourceResolver);
 
-            String packageName = distributionPackage.getId();
-            JcrPackage jcrPackage = openPackage(session, packageName);
+            JcrPackage jcrPackage = ((JcrVaultDistributionPackage) distributionPackage).getJcrPackage();
 
             ImportOptions importOptions = VltUtils.getImportOptions(aclHandling, importMode);
             jcrPackage.extract(importOptions);
@@ -189,27 +192,21 @@ public class JcrVaultDistributionPackageBuilder extends AbstractDistributionPack
 
         InputStream in = FileUtils.openInputStream(pack.getFile());
 
-
-
         try {
-            if (packageRoot != null) {
-                String packageName = packageId.getDownloadName();
-                if (packageRoot.hasNode(packageName)) {
-                    packageRoot.getNode(packageName).remove();
-                }
-
-                JcrPackage jcrPackage = packageManager.create(packageRoot, packageName);
-                Property data = jcrPackage.getData();
-                data.setValue(in);
-                JcrPackageDefinition def = jcrPackage.getDefinition();
-                def.unwrap(pack, true, false);
-
-                log.debug("package uploaded to {}", jcrPackage.getNode().getPath());
-
-                return jcrPackage;
-            } else {
-                return packageManager.upload(in, true);
+            String packageName = packageId.getDownloadName();
+            if (packageRoot.hasNode(packageName)) {
+                packageRoot.getNode(packageName).remove();
             }
+
+            JcrPackage jcrPackage = packageManager.create(packageRoot, packageName);
+            Property data = jcrPackage.getData();
+            data.setValue(in);
+            JcrPackageDefinition def = jcrPackage.getDefinition();
+            def.unwrap(pack, true, false);
+
+            log.debug("package uploaded to {}", jcrPackage.getNode().getPath());
+
+            return jcrPackage;
         } finally {
             IOUtils.closeQuietly(in);
         }
@@ -218,16 +215,11 @@ public class JcrVaultDistributionPackageBuilder extends AbstractDistributionPack
     private JcrPackage openPackage(Session session, String packageName) throws RepositoryException {
         JcrPackageManager packageManager = packaging.getPackageManager(session);
 
-
         Node packageRoot = getPackageRoot(session);
         PackageId packageId = new PackageId(PACKAGE_GROUP, packageName, VERSION);
 
-        if (packageRoot != null) {
-            Node packageNode = packageRoot.getNode(packageId.getDownloadName());
-            return packageManager.open(packageNode);
-        } else {
-            return packageManager.open(packageId);
-        }
+        Node packageNode = packageRoot.getNode(packageId.getDownloadName());
+        return packageManager.open(packageNode);
     }
 
     private PackageId getPackageId(VaultPackage vaultPackage) {
@@ -241,10 +233,25 @@ public class JcrVaultDistributionPackageBuilder extends AbstractDistributionPack
     }
 
     private Node getPackageRoot(Session session) throws RepositoryException {
-        Node packageRoot = null;
-        if (tempPackagesNode != null) {
-            packageRoot = JcrUtils.getOrCreateByPath(tempPackagesNode, "sling:Folder", "sling:Folder", session, true);
+        Node packageRoot = JcrUtils.getNodeIfExists(AbstractDistributionPackage.PACKAGES_ROOT + "/" + tempPackagesNode, session);
+
+        if (packageRoot != null) {
+            return packageRoot;
         }
+
+        synchronized (repolock) {
+            session.refresh(false);
+
+            Node tempRoot = JcrUtils.getNodeIfExists(AbstractDistributionPackage.PACKAGES_ROOT, session);
+
+            if (tempRoot == null) {
+                tempRoot = JcrUtils.getOrCreateByPath(AbstractDistributionPackage.PACKAGES_ROOT, "sling:Folder", "sling:Folder", session, true);
+            }
+
+            packageRoot = JcrUtils.getOrCreateByPath(tempRoot, tempPackagesNode, false, "sling:Folder", "sling:Folder", true);
+
+        }
+
         return packageRoot;
     }
 }

@@ -30,7 +30,7 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.apache.sling.jcr.api.SlingRepository;
@@ -43,6 +43,7 @@ import org.osgi.framework.BundleContext;
         policy = ConfigurationPolicy.REQUIRE
 )
 @Service(DistributionTrigger.class)
+@Property(name="webconsole.configurationFactory.nameHint", value="Trigger name: {name}")
 public class ResourceEventDistributionTriggerFactory implements DistributionTrigger {
 
 
@@ -53,9 +54,9 @@ public class ResourceEventDistributionTriggerFactory implements DistributionTrig
      * resource event path property
      */
     @Property(label = "Path", description = "The resource path for which changes are distributed")
-    public static final String PATH = "path";
+    private static final String PATH = "path";
 
-    ResourceEventDistributionTrigger trigger;
+    private ResourceEventDistributionTrigger trigger;
 
     @Reference
     private SlingRepository repository;

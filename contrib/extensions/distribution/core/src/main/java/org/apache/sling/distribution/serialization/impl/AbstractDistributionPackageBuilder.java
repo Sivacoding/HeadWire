@@ -28,9 +28,9 @@ import java.io.InputStream;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
+import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.serialization.DistributionPackage;
-import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
 import org.apache.sling.distribution.serialization.impl.vlt.VltUtils;
 import org.apache.sling.distribution.util.DistributionJcrUtils;
@@ -74,8 +74,7 @@ public abstract class AbstractDistributionPackageBuilder implements Distribution
             throw new DistributionException("unknown action type " + request.getRequestType());
         }
 
-        distributionPackage.getInfo().put(DistributionPackageInfo.PROPERTY_REQUEST_TYPE, request.getRequestType());
-        distributionPackage.getInfo().put(DistributionPackageInfo.PROPERTY_REQUEST_PATHS, request.getPaths());
+        DistributionPackageUtils.fillInfo(distributionPackage.getInfo(), request);
 
         return distributionPackage;
     }
@@ -163,7 +162,9 @@ public abstract class AbstractDistributionPackageBuilder implements Distribution
     protected void ungetSession(Session session) {
         if (session != null) {
             try {
-                session.save();
+                if (session.hasPendingChanges()) {
+                    session.save();
+                }
             } catch (RepositoryException e) {
                 log.debug("Cannot save session", e);
             }

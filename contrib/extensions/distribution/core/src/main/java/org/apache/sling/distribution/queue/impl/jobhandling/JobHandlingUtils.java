@@ -18,16 +18,23 @@
  */
 package org.apache.sling.distribution.queue.impl.jobhandling;
 
+import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.sling.distribution.queue.DistributionQueueEntry;
 import org.apache.sling.distribution.queue.DistributionQueueItem;
 import org.apache.sling.distribution.queue.DistributionQueueItemState;
 import org.apache.sling.distribution.queue.DistributionQueueItemStatus;
 import org.apache.sling.event.jobs.Job;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class JobHandlingUtils {
+class JobHandlingUtils {
+    private final static Logger log = LoggerFactory.getLogger(JobHandlingUtils.class);
+
 
     private static final String DISTRIBUTION_PACKAGE_PREFIX = "distribution.";
     private static final String ID = DISTRIBUTION_PACKAGE_PREFIX + "item.id";
@@ -35,14 +42,20 @@ public class JobHandlingUtils {
     public static DistributionQueueItem getItem(final Job job) {
 
         Map<String, Object> properties = new HashMap<String, Object>();
-        for (String key : job.getPropertyNames()) {
-            if (key.startsWith(DISTRIBUTION_PACKAGE_PREFIX)) {
-                String infoKey = key.substring(DISTRIBUTION_PACKAGE_PREFIX.length());
-                properties.put(infoKey, job.getProperty(key));
-            }
-        }
 
         String id = (String) job.getProperty(ID);
+
+        try {
+            Set<String> propertyNames = job.getPropertyNames();
+            for (String key : propertyNames) {
+                if (key.startsWith(DISTRIBUTION_PACKAGE_PREFIX)) {
+                    String infoKey = key.substring(DISTRIBUTION_PACKAGE_PREFIX.length());
+                    properties.put(infoKey, job.getProperty(key));
+                }
+            }
+        } catch (Throwable t) {
+            log.error("Cannot read job {} properties", job.getId(), t);
+        }
 
         return new DistributionQueueItem(id, properties);
     }
@@ -68,6 +81,7 @@ public class JobHandlingUtils {
         return properties;
     }
 
+    @CheckForNull
     public static String getQueueName(Job job) {
 
         String topic = job.getTopic();
@@ -85,13 +99,12 @@ public class JobHandlingUtils {
         String queueName = getQueueName(job);
         int attempts = job.getRetryCount();
 
-        DistributionQueueItemStatus status = new DistributionQueueItemStatus(job.getCreated(),
+        return new DistributionQueueItemStatus(job.getCreated(),
                 attempts > 0 ? DistributionQueueItemState.ERROR : DistributionQueueItemState.QUEUED,
                 attempts, queueName);
-
-        return status;
     }
 
+    @CheckForNull
     public static DistributionQueueEntry getEntry(final Job job) {
         DistributionQueueItem item = getItem(job);
         DistributionQueueItemStatus itemStatus = getStatus(job);

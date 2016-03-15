@@ -41,14 +41,18 @@ class DistributionAgentJobConsumer implements JobConsumer {
 
     public JobResult process(Job job) {
         log.debug("processing job {}", job.getId());
-        String queueName = JobHandlingUtils.getQueueName(job);
         DistributionQueueEntry entry = JobHandlingUtils.getEntry(job);
-        DistributionQueueItem item = entry.getItem();
-        log.info("processing item {} in queue {}", item.getId(), queueName);
-        boolean processingResult = queueProcessor.process(queueName, entry);
-        JobResult jobResult = processingResult ? JobResult.OK : JobResult.FAILED;
-        log.info("item {} processed {} with result {}", new Object[]{item.getId(), jobResult, jobResult});
-        return jobResult;
+        boolean processingResult = false;
+        if (entry != null) {
+            String queueName = entry.getStatus().getQueueName();
+            DistributionQueueItem item = entry.getItem();
+            log.debug("processing item {} in queue {}", item.getId(), queueName);
+            processingResult = queueProcessor.process(queueName, entry);
+            log.debug("item {} processed {}", item.getId());
+        } else {
+            log.warn("no entry for job {}", job.getId());
+        }
+        return processingResult ? JobResult.OK : JobResult.FAILED;
     }
 
 }

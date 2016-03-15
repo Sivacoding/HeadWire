@@ -25,10 +25,10 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.sling.SlingServlet;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
-import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.servlets.SlingAllMethodsServlet;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.agent.DistributionAgent;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageInfo;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
@@ -50,6 +50,7 @@ public class DistributionAgentQueueServlet extends SlingAllMethodsServlet {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     @Reference
+    private
     DistributionPackageBuilderProvider packageBuilderProvider;
 
     @Override
@@ -80,52 +81,76 @@ public class DistributionAgentQueueServlet extends SlingAllMethodsServlet {
                 deleteItems(resourceResolver, queue, limit);
             }
         } else if ("copy".equals(operation)) {
-            String sourceQueue = request.getParameter("queuePath");
+            String from = request.getParameter("from");
             String[] idParam = request.getParameterValues("id");
 
-            if (idParam != null) {
+            if (idParam != null && from != null) {
+                DistributionAgent agent = request.getResource().getParent().getParent().adaptTo(DistributionAgent.class);
+                DistributionQueue sourceQueue = agent.getQueue(from);
+
                 addItems(resourceResolver, queue, sourceQueue, idParam);
+            }
+        } else if ("move".equals(operation)) {
+            String from = request.getParameter("from");
+            String[] idParam = request.getParameterValues("id");
+
+            if (idParam != null && from != null) {
+                DistributionAgent agent = request.getResource().getParent().getParent().adaptTo(DistributionAgent.class);
+                DistributionQueue sourceQueue = agent.getQueue(from);
+
+                addItems(resourceResolver, queue, sourceQueue, idParam);
+                deleteItems(resourceResolver, sourceQueue, idParam);
             }
         }
     }
 
-    private void addItems(ResourceResolver resourceResolver, DistributionQueue targetQueue, String queuePath, String[] ids) {
-        DistributionQueue sourceQueue = null;
-        Resource resource = resourceResolver.getResource(queuePath);
+    private void addItems(ResourceResolver resourceResolver, DistributionQueue targetQueue, DistributionQueue sourceQueue, String[] ids) {
 
-        if (resource != null) {
-            sourceQueue = resource.adaptTo(DistributionQueue.class);
-        }
 
         if (sourceQueue == null) {
-            log.warn("cannot find source queue {}", queuePath);
+            log.warn("cannot find source queue {}", sourceQueue);
         }
 
         for (String id: ids) {
+            DistributionQueueEntry targetEntry =  targetQueue.getItem(id);
+
+            if (targetEntry != null) {
+                log.warn("item {} already in queue {}", id, targetQueue.getName());
+                continue;
+            }
+
             DistributionQueueEntry entry = sourceQueue.getItem(id);
             if (entry != null) {
                 targetQueue.add(new DistributionQueueItem(id, entry.getItem()));
+                DistributionPackage distributionPackage = getPackage(resourceResolver, entry.getItem());
+                DistributionPackageUtils.acquire(distributionPackage, targetQueue.getName());
             }
         }
     }
 
-    protected void deleteItems(ResourceResolver resourceResolver, DistributionQueue queue, int limit) {
+    private void deleteItems(ResourceResolver resourceResolver, DistributionQueue queue, int limit) {
         for (DistributionQueueEntry item : queue.getItems(0, limit)) {
             deleteItem(resourceResolver, queue, item);
         }
     }
 
-    protected void deleteItems(ResourceResolver resourceResolver, DistributionQueue queue, String[] ids) {
+    private void deleteItems(ResourceResolver resourceResolver, DistributionQueue queue, String[] ids) {
         for (String id : ids) {
-            DistributionQueueEntry item = queue.getItem(id);
-            deleteItem(resourceResolver, queue, item);
+            DistributionQueueEntry entry = queue.getItem(id);
+            deleteItem(resourceResolver, queue, entry);
         }
     }
 
-    protected void deleteItem(ResourceResolver resourceResolver, DistributionQueue queue, DistributionQueueEntry entry) {
+    private void deleteItem(ResourceResolver resourceResolver, DistributionQueue queue, DistributionQueueEntry entry) {
         DistributionQueueItem item = entry.getItem();
         String id = item.getId();
         queue.remove(id);
+
+        DistributionPackage distributionPackage = getPackage(resourceResolver, item);
+        DistributionPackageUtils.releaseOrDelete(distributionPackage, queue.getName());
+    }
+
+    private DistributionPackage getPackage(ResourceResolver resourceResolver, DistributionQueueItem item) {
         DistributionPackageInfo info = DistributionPackageUtils.fromQueueItem(item);
         String type = info.getType();
 
@@ -133,15 +158,13 @@ public class DistributionAgentQueueServlet extends SlingAllMethodsServlet {
 
         if (packageBuilder != null) {
 
-            DistributionPackage distributionPackage = null;
             try {
-                distributionPackage = packageBuilder.getPackage(resourceResolver, id);
+                return packageBuilder.getPackage(resourceResolver, item.getId());
             } catch (DistributionException e) {
                 log.error("cannot get package", e);
             }
-
-            DistributionPackageUtils.releaseOrDelete(distributionPackage, queue.getName());
-
         }
+
+        return null;
     }
 }

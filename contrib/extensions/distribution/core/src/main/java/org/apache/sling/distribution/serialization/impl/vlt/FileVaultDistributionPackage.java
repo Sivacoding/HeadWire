@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
  */
 public class FileVaultDistributionPackage extends AbstractDistributionPackage implements DistributionPackage {
 
-    Logger log = LoggerFactory.getLogger(FileVaultDistributionPackage.class);
+    private final Logger log = LoggerFactory.getLogger(FileVaultDistributionPackage.class);
 
     private final VaultPackage pkg;
 
@@ -52,6 +52,11 @@ public class FileVaultDistributionPackage extends AbstractDistributionPackage im
     @Nonnull
     public InputStream createInputStream() throws IOException {
         return new FileInputStream(pkg.getFile());
+    }
+
+    @Override
+    public long getSize() {
+        return pkg.getFile().length();
     }
 
     public void close() {

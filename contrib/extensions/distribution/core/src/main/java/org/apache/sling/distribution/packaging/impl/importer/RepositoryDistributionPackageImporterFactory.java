@@ -31,7 +31,7 @@ import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.serialization.DistributionPackageInfo;
@@ -48,6 +48,7 @@ import org.slf4j.LoggerFactory;
         specVersion = "1.1",
         policy = ConfigurationPolicy.REQUIRE)
 @Service(DistributionPackageImporter.class)
+@Property(name="webconsole.configurationFactory.nameHint", value="Importer name: {name}")
 public class RepositoryDistributionPackageImporterFactory implements DistributionPackageImporter {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
@@ -77,7 +78,7 @@ public class RepositoryDistributionPackageImporterFactory implements Distributio
 
         importer = new RepositoryDistributionPackageImporter(repository,
                 PropertiesUtil.toString(config.get(SERVICE_NAME), "admin"),
-                PropertiesUtil.toString(config.get(PATH), "/var/distribution/import"),
+                PropertiesUtil.toString(config.get(PATH), "/var/sling/distribution/import"),
                 PropertiesUtil.toString(config.get(PRIVILEGE_NAME), "jcr:read"));
     }
 

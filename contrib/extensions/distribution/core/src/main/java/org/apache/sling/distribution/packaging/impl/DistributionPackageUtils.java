@@ -19,60 +19,88 @@
 
 package org.apache.sling.distribution.packaging.impl;
 
+import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.queue.DistributionQueueEntry;
-import org.apache.sling.distribution.queue.DistributionQueueStatus;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageInfo;
-import org.apache.sling.distribution.packaging.SharedDistributionPackage;
+import org.apache.sling.distribution.serialization.impl.SharedDistributionPackage;
 import org.apache.sling.distribution.queue.DistributionQueueItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Package related utility methods
  */
 public class DistributionPackageUtils {
 
-    static Logger log = LoggerFactory.getLogger(DistributionPackageUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(DistributionPackageUtils.class);
 
     /**
      * distribution package origin queue
      */
-    public static String PACKAGE_INFO_PROPERTY_ORIGIN_QUEUE = "internal.origin.queue";
+    private static final String PACKAGE_INFO_PROPERTY_ORIGIN_QUEUE = "internal.origin.queue";
 
     /**
      * distribution request user
      */
-    public static String PACKAGE_INFO_PROPERTY_REQUEST_USER = "internal.request.user";
+    public static final String PACKAGE_INFO_PROPERTY_REQUEST_USER = "internal.request.user";
+
+    public static final String PACKAGE_INFO_PROPERTY_REQUEST_ID = "internal.request.id";
+
+    public static final String PACKAGE_INFO_PROPERTY_REQUEST_START_TIME = "internal.request.startTime";
+
+
 
 
     /**
-     * Acquires the package if it's a {@link SharedDistributionPackage}, via {@link SharedDistributionPackage#acquire(String)}
+     * Acquires the package if it's a {@link SharedDistributionPackage}, via {@link SharedDistributionPackage#acquire(String[])}
      * @param distributionPackage a distribution package
-     * @param queueName the name of the queue in which the package should be acquired
+     * @param queueNames the name of the queue in which the package should be acquired
      */
-    public static void acquire(DistributionPackage distributionPackage, String queueName) {
+    public static void acquire(DistributionPackage distributionPackage, String... queueNames) {
         if (distributionPackage instanceof SharedDistributionPackage) {
-            ((SharedDistributionPackage) distributionPackage).acquire(queueName);
+            ((SharedDistributionPackage) distributionPackage).acquire(queueNames);
+        }
+    }
+
+
+    /**
+     * Releases the package if it's a {@link SharedDistributionPackage}, via {@link SharedDistributionPackage#release(String[])}
+     * @param distributionPackage a distribution package
+     * @param queueNames the name of the queue in which the package should be released
+     */
+    public static void release(DistributionPackage distributionPackage, String... queueNames) {
+        if (distributionPackage instanceof SharedDistributionPackage) {
+            ((SharedDistributionPackage) distributionPackage).release(queueNames);
         }
     }
 
     /**
      * Releases a distribution package if it's a {@link SharedDistributionPackage}, otherwise deletes it.
      * @param distributionPackage a distribution package
-     * @param queueName the name of the queue from which it should be eventually released
+     * @param queueNames the name of the queue from which it should be eventually released
      */
-    public static void releaseOrDelete(DistributionPackage distributionPackage, String queueName) {
-        if (distributionPackage instanceof SharedDistributionPackage) {
-            if (queueName != null) {
-                ((SharedDistributionPackage) distributionPackage).release(queueName);
-                log.debug("package {} released from queue {}", distributionPackage.getId(), queueName);
+    public static void releaseOrDelete(DistributionPackage distributionPackage, String... queueNames) {
+        if (distributionPackage == null) {
+            return;
+        }
+        try {
+            if (distributionPackage instanceof SharedDistributionPackage) {
+                if (queueNames != null) {
+                    ((SharedDistributionPackage) distributionPackage).release(queueNames);
+                    log.debug("package {} released from queue {}", distributionPackage.getId(), queueNames);
+                } else {
+                    log.error("package {} cannot be released from null queue", distributionPackage.getId());
+                }
             } else {
-                log.error("package {} cannot be released from null queue", distributionPackage.getId());
+                deleteSafely(distributionPackage);
+                log.debug("package {} deleted", distributionPackage.getId());
             }
-        } else {
-            deleteSafely(distributionPackage);
-            log.debug("package {} deleted", distributionPackage.getId());
+        } catch (Throwable t) {
+            log.error("cannot release package {}", t);
         }
     }
 
@@ -86,6 +114,16 @@ public class DistributionPackageUtils {
                 distributionPackage.delete();
             } catch (Throwable t) {
                 log.error("error deleting package", t);
+            }
+        }
+    }
+
+    public static void closeSafely(DistributionPackage distributionPackage) {
+        if (distributionPackage != null) {
+            try {
+                distributionPackage.close();
+            } catch (Throwable t) {
+                log.error("error closing package", t);
             }
         }
     }
@@ -116,6 +154,24 @@ public class DistributionPackageUtils {
     public static void mergeQueueEntry(DistributionPackageInfo packageInfo, DistributionQueueEntry entry) {
         packageInfo.putAll(entry.getItem());
         packageInfo.put(PACKAGE_INFO_PROPERTY_ORIGIN_QUEUE, entry.getStatus().getQueueName());
+    }
+
+
+    public static void fillInfo(DistributionPackageInfo info, DistributionRequest request) {
+        info.put(DistributionPackageInfo.PROPERTY_REQUEST_TYPE, request.getRequestType());
+        info.put(DistributionPackageInfo.PROPERTY_REQUEST_PATHS, request.getPaths());
+        info.put(DistributionPackageInfo.PROPERTY_REQUEST_DEEP_PATHS, getDeepPaths(request));
+    }
+
+    private static String[] getDeepPaths(DistributionRequest request) {
+        List<String> deepPaths = new ArrayList<String>();
+        for (String path : request.getPaths()) {
+            if (request.isDeep(path)) {
+                deepPaths.add(path);
+            }
+        }
+
+        return deepPaths.toArray(new String[deepPaths.size()]);
     }
 
 }

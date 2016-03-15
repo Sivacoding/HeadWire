@@ -32,6 +32,10 @@ import org.osgi.framework.ServiceReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Helper class which checks whether all conditions for registering
+ * the resource resolver factory are fulfilled.
+ */
 public class FactoryPreconditions {
 
     private static final class RequiredProvider {
@@ -39,7 +43,7 @@ public class FactoryPreconditions {
         public Filter filter;
     };
 
-    private ResourceProviderTracker tracker;
+    private volatile ResourceProviderTracker tracker;
 
     private volatile List<RequiredProvider> requiredProviders;
 
@@ -74,26 +78,37 @@ public class FactoryPreconditions {
 
     public void deactivate() {
         this.requiredProviders = null;
+        this.tracker = null;
     }
 
-    public boolean checkPreconditions() {
+    public boolean checkPreconditions(final String unavailableServicePid) {
         synchronized ( this ) {
-            boolean canRegister = false;
-            if (this.requiredProviders != null) {
-                canRegister = false;
-                for (ResourceProviderHandler h : this.tracker.getResourceProviderStorage().getAllHandlers()) {
-                    for (final RequiredProvider rp : this.requiredProviders) {
-                        ServiceReference ref = h.getInfo().getServiceReference();
+            final List<RequiredProvider> localRequiredProviders = this.requiredProviders;
+            final ResourceProviderTracker localTracker = this.tracker;
+            boolean canRegister = localTracker != null;
+            if (localRequiredProviders != null && localTracker != null ) {
+                for (final RequiredProvider rp : localRequiredProviders) {
+                    canRegister = false;
+                    for (final ResourceProviderHandler h : localTracker.getResourceProviderStorage().getAllHandlers()) {
+                        final ServiceReference ref = h.getInfo().getServiceReference();
+                        final String servicePid = (String)ref.getProperty(Constants.SERVICE_PID);
+                        if ( unavailableServicePid != null && unavailableServicePid.equals(servicePid) ) {
+                            // ignore this service
+                            continue;
+                        }
                         if (rp.filter != null && rp.filter.match(ref)) {
                             canRegister = true;
                             break;
-                        } else if (rp.pid != null && rp.pid.equals(ref.getProperty(Constants.SERVICE_PID))){
+                        } else if (rp.pid != null && rp.pid.equals(servicePid)){
                             canRegister = true;
                             break;
                         } else if (rp.pid != null && rp.pid.equals(ref.getProperty(LegacyResourceProviderWhiteboard.ORIGINAL_SERVICE_PID))) {
                             canRegister = true;
                             break;
                         }
+                    }
+                    if ( !canRegister ) {
+                        break;
                     }
                 }
             }

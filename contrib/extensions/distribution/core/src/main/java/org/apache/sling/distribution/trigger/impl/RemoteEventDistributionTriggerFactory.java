@@ -31,7 +31,7 @@ import org.apache.felix.scr.annotations.Service;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.commons.scheduler.Scheduler;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
@@ -44,6 +44,7 @@ import org.osgi.framework.BundleContext;
         policy = ConfigurationPolicy.REQUIRE
 )
 @Service(DistributionTrigger.class)
+@Property(name="webconsole.configurationFactory.nameHint", value="Trigger name: {name}")
 public class RemoteEventDistributionTriggerFactory implements DistributionTrigger {
 
 
@@ -54,18 +55,19 @@ public class RemoteEventDistributionTriggerFactory implements DistributionTrigge
      * remote event endpoint property
      */
     @Property(label = "Endpoint", description = "The endpoint from which the remote requests should be polled.")
-    public static final String ENDPOINT = "endpoint";
+    private static final String ENDPOINT = "endpoint";
 
 
     @Property(name = "transportSecretProvider.target")
     @Reference(name = "transportSecretProvider")
+    private
     DistributionTransportSecretProvider transportSecretProvider;
 
 
     @Reference
     private Scheduler scheduler;
 
-    RemoteEventDistributionTrigger trigger;
+    private RemoteEventDistributionTrigger trigger;
 
 
     @Activate

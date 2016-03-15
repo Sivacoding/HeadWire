@@ -31,10 +31,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.sling.api.SlingConstants;
-import org.apache.sling.api.resource.Path;
-import org.apache.sling.api.resource.PathSet;
 import org.apache.sling.api.resource.observation.ResourceChange;
 import org.apache.sling.api.resource.observation.ResourceChange.ChangeType;
+import org.apache.sling.api.resource.path.Path;
+import org.apache.sling.api.resource.path.PathSet;
 import org.apache.sling.api.resource.runtime.dto.FailureReason;
 import org.apache.sling.api.resource.runtime.dto.ResourceProviderDTO;
 import org.apache.sling.api.resource.runtime.dto.ResourceProviderFailureDTO;
@@ -55,7 +55,7 @@ import org.slf4j.LoggerFactory;
 /**
  * This service keeps track of all resource providers.
  */
-public class ResourceProviderTracker {
+public class ResourceProviderTracker implements ResourceProviderStorageProvider {
 
     public interface ObservationReporterGenerator {
 
@@ -66,7 +66,9 @@ public class ResourceProviderTracker {
 
     public interface ChangeListener {
 
-        void providerChanged(String pid);
+        void providerAdded();
+
+        void providerRemoved(String pid);
     }
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -104,7 +106,7 @@ public class ResourceProviderTracker {
                 final ServiceReference ref = (ServiceReference)service;
                 final ResourceProviderInfo info = infos.remove(ref);
                 if ( info != null ) {
-                    unregister(info);
+                    unregister(info, (String)ref.getProperty(Constants.SERVICE_PID));
                 }
             }
 
@@ -174,8 +176,15 @@ public class ResourceProviderTracker {
                            this.handlers.remove(info.getPath());
                        }
                    } else {
+                       final ChangeListener cl = this.listener;
+                       if ( cl != null ) {
+                           cl.providerAdded();
+                       }
                        events.add(new ProviderEvent(true, info));
                        if ( matchingHandlers.size() > 1 ) {
+                           if ( cl != null ) {
+                               cl.providerRemoved((String)matchingHandlers.get(1).getInfo().getServiceReference().getProperty(Constants.SERVICE_PID));
+                           }
                            this.deactivate(matchingHandlers.get(1));
                            events.add(new ProviderEvent(false, matchingHandlers.get(1).getInfo()));
                        }
@@ -194,7 +203,7 @@ public class ResourceProviderTracker {
      * Unregister a resource provider.
      * @param info The resource provider info.
      */
-    private void unregister(final ResourceProviderInfo info) {
+    private void unregister(final ResourceProviderInfo info, final String pid) {
         final boolean isInvalid;
         synchronized ( this.invalidProviders ) {
             isInvalid = this.invalidProviders.remove(info) != null;
@@ -207,16 +216,25 @@ public class ResourceProviderTracker {
                 final List<ResourceProviderHandler> matchingHandlers = this.handlers.get(info.getPath());
                 if ( matchingHandlers != null ) {
                     boolean doActivateNext = false;
-                    if ( matchingHandlers.get(0).getInfo() == info ) {
+                    final ResourceProviderHandler firstHandler = matchingHandlers.get(0);
+                    if ( firstHandler.getInfo() == info ) {
                         doActivateNext = true;
-                        this.deactivate(matchingHandlers.get(0));
-                        events.add(new ProviderEvent(false, matchingHandlers.get(0).getInfo()));
+                        final ChangeListener cl = this.listener;
+                        if ( cl != null ) {
+                            cl.providerRemoved(pid);
+                        }
+                        this.deactivate(firstHandler);
+                        events.add(new ProviderEvent(false, firstHandler.getInfo()));
                     }
                     if (removeHandlerByInfo(info, matchingHandlers)) {
                         while (doActivateNext && !matchingHandlers.isEmpty()) {
                             if (this.activate(matchingHandlers.get(0))) {
                                 doActivateNext = false;
                                 events.add(new ProviderEvent(true, matchingHandlers.get(0).getInfo()));
+                                final ChangeListener cl = this.listener;
+                                if ( cl != null ) {
+                                    cl.providerAdded();
+                                }
                             } else {
                                 matchingHandlers.remove(0);
                             }
@@ -244,8 +262,10 @@ public class ResourceProviderTracker {
         Iterator<ResourceProviderHandler> it = infos.iterator();
         boolean removed = false;
         while (it.hasNext()) {
-            if (it.next().getInfo() == info) {
+            final ResourceProviderHandler h = it.next();
+            if (h.getInfo() == info) {
                 it.remove();
+                h.dispose();
                 removed = true;
                 break;
             }
@@ -330,12 +350,14 @@ public class ResourceProviderTracker {
                 final ResourceProviderFailureDTO d = new ResourceProviderFailureDTO();
                 fill(d, entry.getKey());
                 d.reason = entry.getValue();
+                failures.add(d);
             }
         }
         dto.providers = dtos.toArray(new ResourceProviderDTO[dtos.size()]);
         dto.failedProviders = failures.toArray(new ResourceProviderFailureDTO[failures.size()]);
     }
 
+    @Override
     public ResourceProviderStorage getResourceProviderStorage() {
         ResourceProviderStorage result = storage;
         if (result == null) {
@@ -365,8 +387,7 @@ public class ResourceProviderTracker {
         d.path = info.getPath();
         d.refreshable = info.isRefreshable();
         d.serviceId = (Long)info.getServiceReference().getProperty(Constants.SERVICE_ID);
-        d.supportsJCRQuery = false;
-        d.supportsQuery = false;
+        d.supportsQueryLanguage = false;
         d.useResourceAccessSecurity = info.getUseResourceAccessSecurity();
     }
 
@@ -374,8 +395,7 @@ public class ResourceProviderTracker {
         fill(d, handler.getInfo());
         final ResourceProvider<?> provider = handler.getResourceProvider();
         if ( provider != null ) {
-            d.supportsJCRQuery = provider.getJCRQueryProvider() != null;
-            d.supportsQuery = provider.getQueryProvider() != null;
+            d.supportsQueryLanguage = provider.getQueryLanguageProvider() != null;
         }
     }
 
@@ -404,9 +424,6 @@ public class ResourceProviderTracker {
                 for(final ProviderEvent e : events) {
                     postOSGiEvent(e);
                     postResourceProviderChange(e);
-                    if ( e.pid != null ) {
-                        listener.providerChanged(e.pid);
-                    }
                 }
             }
         });

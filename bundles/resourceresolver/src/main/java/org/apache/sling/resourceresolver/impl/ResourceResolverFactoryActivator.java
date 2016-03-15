@@ -26,7 +26,6 @@ import java.util.Map;
 
 import org.apache.commons.collections.BidiMap;
 import org.apache.commons.collections.bidimap.TreeBidiMap;
-import org.apache.commons.lang.ArrayUtils;
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
@@ -63,7 +62,6 @@ import org.osgi.service.event.EventAdmin;
  * One all required providers and provider factories are available a resource resolver factory
  * is registered.
  *
- * TODO : Should we implement modifiable? It would be easy but what about long running resolvers?
  */
 @Component(
      name = "org.apache.sling.jcr.resource.internal.JcrResourceResolverFactoryImpl",
@@ -136,7 +134,7 @@ public class ResourceResolverFactoryActivator implements Runnable {
     private static final String PROP_ALLOW_DIRECT = "resource.resolver.allowDirect";
 
     @Property(unbounded=PropertyUnbounded.ARRAY,
-              value = "org.apache.sling.jcr.resource.internal.helper.jcr.JcrResourceProvider",
+              value = "org.apache.sling.jcr.resource.internal.helper.jcr.JcrResourceProviderFactory",
               label = "Required Providers",
               description = "A resource resolver factory is only " +
                              "available (registered) if all resource providers mentioned in this configuration " +
@@ -489,9 +487,17 @@ public class ResourceResolverFactoryActivator implements Runnable {
                     new ChangeListener() {
 
                         @Override
-                        public void providerChanged(final String pid) {
-                            if (ArrayUtils.contains(requiredResourceProviders, pid)) {
-                                checkFactoryPreconditions();
+                        public void providerAdded() {
+                            if ( factoryRegistration == null ) {
+                                checkFactoryPreconditions(null);
+                            }
+
+                        }
+
+                        @Override
+                        public void providerRemoved(final String pid) {
+                            if ( factoryRegistration != null ) {
+                                checkFactoryPreconditions(pid);
                             }
                         }
                     });
@@ -558,7 +564,7 @@ public class ResourceResolverFactoryActivator implements Runnable {
         requiredResourceProviders = PropertiesUtil.toStringArray(properties.get(PROP_REQUIRED_PROVIDERS));
         this.preconds.activate(bc, requiredResourceProviders, resourceProviderTracker);
 
-        this.checkFactoryPreconditions();
+        this.checkFactoryPreconditions(null);
 
         final Thread t = new Thread(this);
         t.setDaemon(true);
@@ -658,10 +664,10 @@ public class ResourceResolverFactoryActivator implements Runnable {
     /**
      * Check the preconditions and if it changed, either register factory or unregister
      */
-    private void checkFactoryPreconditions() {
+    private void checkFactoryPreconditions(final String unavailableServicePid) {
         final ComponentContext localContext = this.componentContext;
         if ( localContext != null ) {
-            final boolean result = this.preconds.checkPreconditions();
+            final boolean result = this.preconds.checkPreconditions(unavailableServicePid);
             if ( result && this.factoryRegistration == null ) {
                 this.registerFactory(localContext);
             } else if ( !result && this.factoryRegistration != null ) {
@@ -723,7 +729,7 @@ public class ResourceResolverFactoryActivator implements Runnable {
             }
 
             if ( isRunning ) {
-                this.checkFactoryPreconditions();
+                this.checkFactoryPreconditions(null);
             }
         }
         this.unregisterFactory();

@@ -45,7 +45,7 @@ import org.apache.sling.commons.scheduler.Scheduler;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.DistributionRequestType;
 import org.apache.sling.distribution.SimpleDistributionRequest;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.transport.impl.DistributionEndpoint;
 import org.apache.sling.distribution.trigger.DistributionRequestHandler;
@@ -105,7 +105,7 @@ public class RemoteEventDistributionTrigger implements DistributionTrigger {
         scheduler.unschedule(getJobName(requestHandler));
     }
 
-    String getJobName(DistributionRequestHandler requestHandler) {
+    private String getJobName(DistributionRequestHandler requestHandler) {
         return SCHEDULE_NAME + requestHandler.toString();
     }
 

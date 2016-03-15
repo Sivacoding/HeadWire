@@ -23,11 +23,11 @@ import javax.jcr.Session;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.TreeMap;
 import java.util.UUID;
 
 import org.apache.jackrabbit.vault.fs.api.ImportMode;
-import org.apache.jackrabbit.vault.fs.api.PathFilterSet;
 import org.apache.jackrabbit.vault.fs.api.WorkspaceFilter;
 import org.apache.jackrabbit.vault.fs.io.AccessControlHandling;
 import org.apache.jackrabbit.vault.fs.io.ImportOptions;
@@ -36,7 +36,7 @@ import org.apache.jackrabbit.vault.packaging.Packaging;
 import org.apache.jackrabbit.vault.packaging.VaultPackage;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
 import org.apache.sling.distribution.serialization.impl.AbstractDistributionPackageBuilder;
@@ -58,15 +58,16 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
     private final Packaging packaging;
 
-    private ImportMode importMode;
+    private final ImportMode importMode;
 
-    private AccessControlHandling aclHandling;
+    private final AccessControlHandling aclHandling;
 
     private final String[] packageRoots;
     private final File tempDirectory;
-    private final TreeMap<String, PathFilterSet> filters;
+    private final TreeMap<String, List<String>> filters;
+    private final boolean useBinaryReferences;
 
-    public FileVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling, String[] packageRoots, String[] filterRules, String tempFilesFolder) {
+    public FileVaultDistributionPackageBuilder(String type, Packaging packaging, ImportMode importMode, AccessControlHandling aclHandling, String[] packageRoots, String[] filterRules, String tempFilesFolder, boolean useBinaryReferences) {
         super(type);
         this.packaging = packaging;
         this.importMode = importMode;
@@ -75,7 +76,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
 
         this.tempDirectory = VltUtils.getTempFolder(tempFilesFolder);
         this.filters = VltUtils.parseFilters(filterRules);
-
+        this.useBinaryReferences = useBinaryReferences;
 
         log.info("using temp directory {}", tempDirectory == null ? tempDirectory : tempDirectory.getPath());
     }
@@ -92,7 +93,7 @@ public class FileVaultDistributionPackageBuilder extends AbstractDistributionPac
             String packageName = getType() + "_" + System.currentTimeMillis() + "_" + UUID.randomUUID();
 
             WorkspaceFilter filter = VltUtils.createFilter(request, filters);
-            ExportOptions opts = VltUtils.getExportOptions(filter, packageRoots, packageGroup, packageName, VERSION);
+            ExportOptions opts = VltUtils.getExportOptions(filter, packageRoots, packageGroup, packageName, VERSION, useBinaryReferences);
 
             log.debug("assembling package {}", packageGroup + '/' + packageName + "-" + VERSION);
 

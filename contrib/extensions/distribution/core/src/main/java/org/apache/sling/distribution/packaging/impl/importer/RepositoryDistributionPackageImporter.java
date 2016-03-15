@@ -30,7 +30,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.util.Text;
 import org.apache.sling.api.resource.ResourceResolver;
-import org.apache.sling.distribution.DistributionException;
+import org.apache.sling.distribution.common.DistributionException;
 import org.apache.sling.distribution.serialization.DistributionPackage;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.serialization.DistributionPackageInfo;
@@ -84,7 +84,7 @@ public class RepositoryDistributionPackageImporter implements DistributionPackag
                         IOUtils.closeQuietly(inputStream);
                     }
                 }
-                log.info("package {} imported into the repository as node {} ",
+                log.debug("package {} imported into the repository as node {} ",
                         distributionPackage.getId(), addedNode.getPath());
 
             } else {
@@ -99,6 +99,7 @@ public class RepositoryDistributionPackageImporter implements DistributionPackag
         }
     }
 
+    @Nonnull
     public DistributionPackageInfo importStream(@Nonnull ResourceResolver resourceResolver, @Nonnull InputStream stream) throws DistributionException {
         throw new DistributionException("not supported");
     }

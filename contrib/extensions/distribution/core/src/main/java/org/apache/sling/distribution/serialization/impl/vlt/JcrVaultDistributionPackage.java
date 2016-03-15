@@ -36,7 +36,8 @@ import org.slf4j.LoggerFactory;
  * a JcrPackage based {@link DistributionPackage}
  */
 public class JcrVaultDistributionPackage extends AbstractDistributionPackage implements DistributionPackage {
-    private final Logger log = LoggerFactory.getLogger(getClass());
+
+    private static final Logger log = LoggerFactory.getLogger(JcrVaultDistributionPackage.class);
 
     private final JcrPackage jcrPackage;
     private final Session session;
@@ -57,11 +58,11 @@ public class JcrVaultDistributionPackage extends AbstractDistributionPackage imp
 
     }
 
-    public static String getIdFromPackage(JcrPackage jcrPackage) {
+    private static String getIdFromPackage(JcrPackage jcrPackage) {
         try {
             return jcrPackage.getPackage().getId().getName();
-        } catch (RepositoryException e) {
-        } catch (IOException e) {
+        } catch (Exception e) {
+            log.warn("could not get package {}", jcrPackage, e);
         }
 
         return null;
@@ -77,6 +78,11 @@ public class JcrVaultDistributionPackage extends AbstractDistributionPackage imp
         }
     }
 
+    @Override
+    public long getSize() {
+        return jcrPackage.getSize();
+    }
+
     public void close() {
         jcrPackage.close();
     }
@@ -88,5 +94,9 @@ public class JcrVaultDistributionPackage extends AbstractDistributionPackage imp
         } catch (Throwable e) {
             log.error("Cannot delete package", e);
         }
+    }
+
+    JcrPackage getJcrPackage() {
+        return jcrPackage;
     }
 }

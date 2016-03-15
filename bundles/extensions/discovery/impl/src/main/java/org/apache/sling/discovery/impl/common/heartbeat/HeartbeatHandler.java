@@ -52,7 +52,6 @@ import org.apache.sling.discovery.impl.cluster.voting.VotingHelper;
 import org.apache.sling.discovery.impl.cluster.voting.VotingView;
 import org.apache.sling.discovery.impl.common.View;
 import org.apache.sling.discovery.impl.common.ViewHelper;
-import org.apache.sling.launchpad.api.StartupListener;
 import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.BundleException;
 import org.osgi.service.http.HttpService;
@@ -65,7 +64,7 @@ import org.osgi.service.http.HttpService;
  * remote TopologyConnectorServlets.
  */
 @Component
-@Service(value = { HeartbeatHandler.class, StartupListener.class })
+@Service(value = HeartbeatHandler.class)
 @Reference(referenceInterface=HttpService.class,
            cardinality=ReferenceCardinality.OPTIONAL_MULTIPLE,
            policy=ReferencePolicy.DYNAMIC)
@@ -238,7 +237,11 @@ public class HeartbeatHandler extends BaseViewChecker {
         // so this second part is now done (additionally) in a 2nd runner here:
         try {
             long interval = config.getHeartbeatInterval();
-            logger.info("initialize: starting periodic heartbeat job for "+slingId+" with interval "+interval+" sec.");
+            final long heartbeatTimeoutMillis = config.getHeartbeatTimeoutMillis();
+            final long heartbeatIntervalMillis = config.getHeartbeatInterval() * 1000;
+            final long maxMillisSinceHb = Math.max(Math.min(heartbeatTimeoutMillis, 2 * heartbeatIntervalMillis),
+                    heartbeatTimeoutMillis - 2 * heartbeatIntervalMillis);
+            logger.info("initialize: starting periodic checkForLocalClusterViewChange job for "+slingId+" with maxMillisSinceHb=" + maxMillisSinceHb + "ms, interval="+interval+" sec.");
             if (interval==0) {
                 logger.warn("initialize: Repeat interval cannot be zero. Defaulting to 10sec.");
                 interval = 10;
@@ -254,13 +257,10 @@ public class HeartbeatHandler extends BaseViewChecker {
                         // then mark ourselves as in topologyChanging automatically
                         final long timeSinceHb = System.currentTimeMillis() - lastHb.getTimeInMillis();
                         // SLING-5285: add a safety-margin for SLING-5195
-                        final long heartbeatTimeoutMillis = config.getHeartbeatTimeoutMillis();
-                        final long heartbeatIntervalMillis = config.getHeartbeatInterval() * 1000;
-                        final long maxTimeSinceHb = heartbeatTimeoutMillis - 2 * heartbeatIntervalMillis;
-                        if (timeSinceHb > maxTimeSinceHb) {
-                            logger.info("checkForLocalClusterViewChange/.run: time since local instance last wrote a heartbeat is " + timeSinceHb + "ms"
+                        if (timeSinceHb > maxMillisSinceHb) {
+                            logger.warn("checkForLocalClusterViewChange/.run: time since local instance last wrote a heartbeat is " + timeSinceHb + "ms"
                                     + " (heartbeatTimeoutMillis=" + heartbeatTimeoutMillis + ", heartbeatIntervalMillis=" + heartbeatIntervalMillis
-                                    + " => maxTimeSinceHb=" + maxTimeSinceHb + "). Flagging us as (still) changing");
+                                    + " => maxMillisSinceHb=" + maxMillisSinceHb + "). Flagging us as (still) changing");
                             // mark the current establishedView as faulty
                             invalidateCurrentEstablishedView();
                             
@@ -470,7 +470,9 @@ public class HeartbeatHandler extends BaseViewChecker {
                 }
                 resetLeaderElectionId = false;
             }
+            logger.debug("issueClusterLocalHeartbeat: committing cluster-local heartbeat to repository for {}", slingId);
             resourceResolver.commit();
+            logger.debug("issueClusterLocalHeartbeat: committed cluster-local heartbeat to repository for {}", slingId);
 
             // SLING-2892: only in success case: remember the last heartbeat value written
             lastHeartbeatWritten = currentTime;

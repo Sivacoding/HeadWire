@@ -336,6 +336,10 @@ public class ViewStateManagerImpl implements ViewStateManager {
             if (consistencyService!=null) {
                 consistencyService.cancelSync();
             }
+            
+            if (minEventDelayHandler!=null) {
+                minEventDelayHandler.cancelDelaying();
+            }
             logger.trace("handleDeactivated: setting isChanging to false");
             isChanging = false;
             
@@ -627,6 +631,9 @@ public class ViewStateManagerImpl implements ViewStateManager {
                 return false;
             }
             if (oldInstance.isLeader() != newInstance.isLeader()) {
+                return false;
+            }
+            if (!oldInstance.getClusterView().getId().equals(newInstance.getClusterView().getId())) {
                 return false;
             }
         }
