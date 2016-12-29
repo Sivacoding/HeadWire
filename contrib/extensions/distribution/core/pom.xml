@@ -32,7 +32,7 @@
     <!-- P R O J E C T                                                           -->
     <!-- ======================================================================= -->
     <artifactId>org.apache.sling.distribution.core</artifactId>
-    <version>0.1.15-SNAPSHOT</version>
+    <version>0.1.19-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>Apache Sling Distribution Core</name>
@@ -68,18 +68,33 @@
                     <instructions>
                         <Bundle-SymbolicName>org.apache.sling.distribution.core</Bundle-SymbolicName>
                         <Export-Package>
-                            org.apache.sling.distribution.util
+                            org.apache.sling.distribution.util,
+                            org.apache.sling.distribution.common,
+                            org.apache.sling.distribution.serialization
                         </Export-Package>
                         <Import-Package>
-                            org.apache.sling.event.jobs;version="[1.5.0,3.0)",org.apache.sling.event.jobs.consumer;version="[1.1,2)",*
+                            org.apache.http.nio.*;resolution:=optional,
+                            org.apache.http.impl.nio.client.*;resolution:=optional,
+                            org.apache.sling.event.jobs;version="[1.5.0,3.0)",
+                            org.apache.sling.event.jobs.consumer;version="[1.1,2)",
+                            org.apache.sling.jcr.api;version="2.2.0",
+                            *
                         </Import-Package>
-                        <Embed-Dependency>httpasyncclient</Embed-Dependency>
                     </instructions>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*-checkpoint</exclude>
+                    </excludes>
+                </configuration>
             </plugin>
         </plugins>
     </build>
@@ -106,11 +121,23 @@
             <version>2.6.4</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.sling</groupId>
+            <artifactId>org.apache.sling.testing.resourceresolver-mock</artifactId>
+            <version>1.1.14</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.sling</groupId>
+            <artifactId>org.apache.sling.testing.resourceresolver-mock</artifactId>
+            <version>1.1.12</version>
+            <scope>test</scope>
+        </dependency>
         <!-- SLING -->
         <dependency>
             <groupId>org.apache.sling</groupId>
             <artifactId>org.apache.sling.api</artifactId>
-            <version>2.5.0</version>
+            <version>2.7.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.sling</groupId>
@@ -202,13 +229,14 @@
         <dependency>
             <groupId>org.apache.jackrabbit.vault</groupId>
             <artifactId>org.apache.jackrabbit.vault</artifactId>
-            <version>3.1.24</version>
+            <version>3.1.28</version>
         </dependency>
         <!-- HTTP -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpasyncclient</artifactId>
             <version>4.0.2</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
@@ -246,6 +274,12 @@
             <artifactId>jsr305</artifactId>
             <version>2.0.0</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.sling</groupId>
+            <artifactId>org.apache.sling.testing.resourceresolver-mock</artifactId>
+            <version>1.1.15-SNAPSHOT</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>

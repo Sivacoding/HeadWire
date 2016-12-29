@@ -35,10 +35,15 @@ import org.apache.jackrabbit.vault.packaging.Packaging;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.DistributionRequestType;
+import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
 import org.apache.sling.distribution.component.impl.SettingsUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
+import org.apache.sling.distribution.monitor.impl.MonitoringDistributionQueueProvider;
+import org.apache.sling.distribution.monitor.impl.ReverseDistributionAgentMBean;
+import org.apache.sling.distribution.monitor.impl.ReverseDistributionAgentMBeanImpl;
+import org.apache.sling.distribution.packaging.DistributionPackageBuilder;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.DistributionPackageImporter;
 import org.apache.sling.distribution.packaging.impl.exporter.RemoteDistributionPackageExporter;
@@ -47,19 +52,17 @@ import org.apache.sling.distribution.queue.DistributionQueueProvider;
 import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.SingleQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.jobhandling.JobHandlingDistributionQueueProvider;
-import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.serialization.impl.DefaultSharedDistributionPackageBuilder;
 import org.apache.sling.distribution.transport.DistributionTransportSecretProvider;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.apache.sling.event.jobs.JobManager;
 import org.apache.sling.jcr.api.SlingRepository;
 import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.BundleContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * An OSGi service factory for {@link org.apache.sling.distribution.agent.DistributionAgent}s which references already existing OSGi services.
+ * An OSGi service factory for "reverse agents" that pull resources from remote instances (e.g. from "queueing agents").
+ *
+ * @see {@link org.apache.sling.distribution.agent.DistributionAgent}
  */
 @Component(metatype = true,
         label = "Apache Sling Distribution Agent - Reverse Agents Factory",
@@ -72,9 +75,7 @@ import org.slf4j.LoggerFactory;
         policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_MULTIPLE,
         bind = "bindDistributionTrigger", unbind = "unbindDistributionTrigger")
 @Property(name="webconsole.configurationFactory.nameHint", value="Agent name: {name}")
-public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFactory {
-    private final Logger log = LoggerFactory.getLogger(getClass());
-
+public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFactory<ReverseDistributionAgentMBean> {
 
     @Property(label = "Name", description = "The name of the agent.")
     public static final String NAME = DistributionComponentConstants.PN_NAME;
@@ -157,6 +158,9 @@ public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFa
     @Reference
     private SlingRepository slingRepository;
 
+    public ReverseDistributionAgentFactory() {
+        super(ReverseDistributionAgentMBean.class);
+    }
 
     @Activate
     protected void activate(BundleContext context, Map<String, Object> config) {
@@ -182,18 +186,14 @@ public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFa
         String serviceName = PropertiesUtil.toString(config.get(SERVICE_NAME), null);
         boolean queueProcessingEnabled = PropertiesUtil.toBoolean(config.get(QUEUE_PROCESSING_ENABLED), true);
 
-
         String[] exporterEndpoints = PropertiesUtil.toStringArray(config.get(EXPORTER_ENDPOINTS), new String[0]);
         exporterEndpoints = SettingsUtils.removeEmptyEntries(exporterEndpoints);
 
-
         int pullItems = PropertiesUtil.toInteger(config.get(PULL_ITEMS), Integer.MAX_VALUE);
 
-
-        DefaultSharedDistributionPackageBuilder packageBuilder = new DefaultSharedDistributionPackageBuilder(this.packageBuilder);
         DistributionPackageExporter packageExporter = new RemoteDistributionPackageExporter(distributionLog, packageBuilder, transportSecretProvider, exporterEndpoints, pullItems);
-        DistributionPackageImporter packageImporter = new LocalDistributionPackageImporter(packageBuilder);
-        DistributionQueueProvider queueProvider = new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
+        DistributionPackageImporter packageImporter = new LocalDistributionPackageImporter(agentName, distributionEventFactory, packageBuilder);
+        DistributionQueueProvider queueProvider = new MonitoringDistributionQueueProvider(new JobHandlingDistributionQueueProvider(agentName, jobManager, context), context);
 
         DistributionQueueDispatchingStrategy exportQueueStrategy = new SingleQueueDispatchingStrategy();
         DistributionQueueDispatchingStrategy importQueueStrategy = null;
@@ -207,6 +207,11 @@ public class ReverseDistributionAgentFactory extends AbstractDistributionAgentFa
                 serviceName, packageImporter, packageExporter, requestAuthorizationStrategy,
                 queueProvider, exportQueueStrategy, importQueueStrategy, distributionEventFactory, resourceResolverFactory, slingRepository, distributionLog, allowedRequests, null, 0);
 
-
     }
+
+    @Override
+    protected ReverseDistributionAgentMBean createMBeanAgent(DistributionAgent agent, Map<String, Object> osgiConfiguration) {
+        return new ReverseDistributionAgentMBeanImpl(agent, osgiConfiguration);
+    }
+
 }

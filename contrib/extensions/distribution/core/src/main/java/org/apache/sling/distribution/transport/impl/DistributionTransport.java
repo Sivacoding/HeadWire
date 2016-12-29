@@ -24,7 +24,7 @@ import javax.annotation.Nullable;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.distribution.DistributionRequest;
 import org.apache.sling.distribution.common.DistributionException;
-import org.apache.sling.distribution.serialization.DistributionPackage;
+import org.apache.sling.distribution.packaging.DistributionPackage;
 
 /**
  * A transport layer implementation to transport data between two (or eventually more) Sling instances.
@@ -58,6 +58,6 @@ public interface DistributionTransport {
      *                                        fail to be retrieved from the target instance
      */
     @Nullable
-    DistributionPackageProxy retrievePackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request, @Nonnull DistributionTransportContext context) throws DistributionException;
+    RemoteDistributionPackage retrievePackage(@Nonnull ResourceResolver resourceResolver, @Nonnull DistributionRequest request, @Nonnull DistributionTransportContext context) throws DistributionException;
 
 }

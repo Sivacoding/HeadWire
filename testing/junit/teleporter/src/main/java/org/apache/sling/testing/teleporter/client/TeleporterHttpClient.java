@@ -105,15 +105,17 @@ class TeleporterHttpClient {
                 throw new IOException("Got status code " + status + " for " + url);
             }
         } finally {
-            c.disconnect();
+            cleanup(c);
         }
     }
 
-    void uninstallBundle(String bundleSymbolicName) throws MalformedURLException, IOException {
+    void uninstallBundle(String bundleSymbolicName, int webConsoleReadyTimeoutSeconds) throws MalformedURLException, IOException {
         // equivalent of
         // curl -u admin:admin -F action=uninstall http://localhost:8080/system/console/bundles/$N
         final String url = baseUrl + "/system/console/bundles/" + bundleSymbolicName;
         final HttpURLConnection c = (HttpURLConnection)new URL(url).openConnection();
+        
+        waitForStatus(url, 200, webConsoleReadyTimeoutSeconds * 1000);
         
         try {
             setConnectionCredentials(c);
@@ -125,7 +127,7 @@ class TeleporterHttpClient {
                 throw new IOException("Got status code " + status + " for " + url);
             }
         } finally {
-            c.disconnect();
+            cleanup(c);
         }
     }
     
@@ -136,11 +138,17 @@ class TeleporterHttpClient {
         c.setDoOutput(true);
         c.setDoInput(true);
         c.setInstanceFollowRedirects(false);
+        boolean gotStatus = false;
+        int result = 0;
         try {
-            return c.getResponseCode();
+            result = c.getResponseCode();
+            gotStatus = true;
         } finally {
-            c.disconnect();
+            // If we didn't get a status, do not attempt
+            // to get input streams as this would retry connecting
+            cleanup(c, gotStatus);
         }
+        return result;
     }
 
     void runTests(String testSelectionPath, int testReadyTimeoutSeconds) throws MalformedURLException, IOException, MultipleFailureException {
@@ -184,7 +192,36 @@ class TeleporterHttpClient {
         } catch(ClassNotFoundException e) {
             throw new IOException("Exception reading test results:" + e, e);
         } finally {
-            c.disconnect();
+            cleanup(c);
         }
+    }
+    
+    private void consumeAndClose(InputStream is) throws IOException {
+        if(is == null) {
+            return;
+        }
+        final byte [] buffer = new byte[16384];
+        while(is.read(buffer) != -1) {
+            // nothing to do, just consume the stream
+        }
+        is.close();
+    }
+    
+    private void cleanup(HttpURLConnection c) {
+        cleanup(c, true);
+    }
+    
+    private void cleanup(HttpURLConnection c, boolean includeInputStreams) {
+        if(includeInputStreams) {
+            try {
+                consumeAndClose(c.getInputStream());
+            } catch(IOException ignored) {
+            }
+            try {
+                consumeAndClose(c.getErrorStream());
+            } catch(IOException ignored) {
+            }
+        }
+        c.disconnect();
     }
 }

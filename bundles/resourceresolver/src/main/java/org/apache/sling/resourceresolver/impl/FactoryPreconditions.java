@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 public class FactoryPreconditions {
 
     private static final class RequiredProvider {
+        public String name;
         public String pid;
         public Filter filter;
     };
@@ -47,41 +48,60 @@ public class FactoryPreconditions {
 
     private volatile List<RequiredProvider> requiredProviders;
 
-    public void activate(final BundleContext bc, final String[] configuration, ResourceProviderTracker tracker) {
-        this.tracker = tracker;
+    public void activate(final BundleContext bc,
+            final String[] legycyConfiguration,
+            final String[] namesConfiguration,
+            final ResourceProviderTracker tracker) {
+        synchronized ( this ) {
+            this.tracker = tracker;
 
-        final List<RequiredProvider> rps = new ArrayList<RequiredProvider>();
-        if ( configuration != null ) {
-            final Logger logger = LoggerFactory.getLogger(getClass());
-            for(final String r : configuration) {
-                if ( r != null && r.trim().length() > 0 ) {
-                    final String value = r.trim();
-                    RequiredProvider rp = new RequiredProvider();
-                    if ( value.startsWith("(") ) {
-                        try {
-                            rp.filter = bc.createFilter(value);
-                        } catch (final InvalidSyntaxException e) {
-                            logger.warn("Ignoring invalid filter syntax for required provider: " + value, e);
-                            rp = null;
+            final List<RequiredProvider> rps = new ArrayList<RequiredProvider>();
+            if ( legycyConfiguration != null ) {
+                final Logger logger = LoggerFactory.getLogger(getClass());
+                for(final String r : legycyConfiguration) {
+                    if ( r != null && r.trim().length() > 0 ) {
+                        final String value = r.trim();
+                        RequiredProvider rp = new RequiredProvider();
+                        if ( value.startsWith("(") ) {
+                            try {
+                                rp.filter = bc.createFilter(value);
+                            } catch (final InvalidSyntaxException e) {
+                                logger.warn("Ignoring invalid filter syntax for required provider: " + value, e);
+                                rp = null;
+                            }
+                        } else {
+                            rp.pid = value;
                         }
-                    } else {
-                        rp.pid = value;
-                    }
-                    if ( rp != null ) {
-                        rps.add(rp);
+                        if ( rp != null ) {
+                            rps.add(rp);
+                        }
                     }
                 }
             }
+            if ( namesConfiguration != null ) {
+                for(final String r : namesConfiguration) {
+                    if( r != null ) {
+                        final String value = r.trim();
+                        if ( !value.isEmpty() ) {
+                            final RequiredProvider rp = new RequiredProvider();
+                            rp.name = value;
+                            rps.add(rp);
+                        }
+                    }
+                }
+            }
+            this.requiredProviders = rps;
         }
-        this.requiredProviders = rps;
     }
 
     public void deactivate() {
-        this.requiredProviders = null;
-        this.tracker = null;
+        synchronized ( this ) {
+            this.requiredProviders = null;
+            this.tracker = null;
+        }
     }
 
-    public boolean checkPreconditions(final String unavailableServicePid) {
+    public boolean checkPreconditions(final String unavailableName, final String unavailableServicePid) {
         synchronized ( this ) {
             final List<RequiredProvider> localRequiredProviders = this.requiredProviders;
             final ResourceProviderTracker localTracker = this.tracker;
@@ -91,12 +111,19 @@ public class FactoryPreconditions {
                     canRegister = false;
                     for (final ResourceProviderHandler h : localTracker.getResourceProviderStorage().getAllHandlers()) {
                         final ServiceReference ref = h.getInfo().getServiceReference();
-                        final String servicePid = (String)ref.getProperty(Constants.SERVICE_PID);
+                        final Object servicePid = ref.getProperty(Constants.SERVICE_PID);
                         if ( unavailableServicePid != null && unavailableServicePid.equals(servicePid) ) {
                             // ignore this service
                             continue;
                         }
-                        if (rp.filter != null && rp.filter.match(ref)) {
+                        if ( unavailableName != null && unavailableName.equals(h.getInfo().getName()) ) {
+                            // ignore this service
+                            continue;
+                        }
+                        if ( rp.name != null && rp.name.equals(h.getInfo().getName()) ) {
+                            canRegister = true;
+                            break;
+                        } else if (rp.filter != null && rp.filter.match(ref)) {
                             canRegister = true;
                             break;
                         } else if (rp.pid != null && rp.pid.equals(servicePid)){

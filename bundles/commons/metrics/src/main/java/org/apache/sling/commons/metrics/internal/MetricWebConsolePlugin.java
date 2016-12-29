@@ -47,30 +47,27 @@ import com.codahale.metrics.Timer;
 import org.apache.commons.io.output.WriterOutputStream;
 import org.apache.felix.inventory.Format;
 import org.apache.felix.inventory.InventoryPrinter;
-import org.apache.felix.scr.annotations.Activate;
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Deactivate;
-import org.apache.felix.scr.annotations.Properties;
-import org.apache.felix.scr.annotations.Property;
-import org.apache.felix.scr.annotations.Service;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.util.tracker.ServiceTracker;
 import org.osgi.util.tracker.ServiceTrackerCustomizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Component
-@Service(value = {InventoryPrinter.class, Servlet.class})
-@Properties({
-        @Property(name = "felix.webconsole.label", value = "slingmetrics"),
-        @Property(name = "felix.webconsole.title", value = "Metrics"),
-        @Property(name = "felix.webconsole.category", value = "Sling"),
-        @Property(name = InventoryPrinter.FORMAT, value = {"TEXT" }),
-        @Property(name = InventoryPrinter.NAME, value = "slingmetrics"),
-        @Property(name = InventoryPrinter.TITLE, value = "Sling Metrics"),
-        @Property(name = InventoryPrinter.WEBCONSOLE, boolValue = true)
-})
+@Component(service = {InventoryPrinter.class, Servlet.class},
+        property = {
+                "felix.webconsole.label=slingmetrics",
+                "felix.webconsole.title=Metrics",
+                "felix.webconsole.category=Sling",
+                InventoryPrinter.FORMAT + "=TEXT",
+                InventoryPrinter.FORMAT + "=JSON",
+                InventoryPrinter.TITLE + "=Sling Metrics",
+                InventoryPrinter.NAME + "=slingmetrics"
+        }
+)
 public class MetricWebConsolePlugin extends HttpServlet implements
         InventoryPrinter, ServiceTrackerCustomizer<MetricRegistry, MetricRegistry>{
     /**
@@ -82,7 +79,7 @@ public class MetricWebConsolePlugin extends HttpServlet implements
     private BundleContext context;
     private ServiceTracker<MetricRegistry, MetricRegistry> tracker;
     private ConcurrentMap<ServiceReference, MetricRegistry> registries
-            = new ConcurrentHashMap<ServiceReference, MetricRegistry>();
+            = new ConcurrentHashMap<>();
 
     private TimeUnit rateUnit = TimeUnit.SECONDS;
     private TimeUnit durationUnit = TimeUnit.MILLISECONDS;
@@ -94,7 +91,7 @@ public class MetricWebConsolePlugin extends HttpServlet implements
     private void activate(BundleContext context){
         this.context = context;
         this.timeUnit = new MetricTimeUnits(rateUnit, durationUnit, specificRateUnits, specificDurationUnits);
-        tracker = new ServiceTracker<MetricRegistry, MetricRegistry>(context, MetricRegistry.class, this);
+        tracker = new ServiceTracker<>(context, MetricRegistry.class, this);
         tracker.open();
     }
 
@@ -110,6 +107,13 @@ public class MetricWebConsolePlugin extends HttpServlet implements
         if (format == Format.TEXT) {
             MetricRegistry registry = getConsolidatedRegistry();
             ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
+                    .outputTo(new PrintStream(new WriterOutputStream(printWriter)))
+                    .build();
+            reporter.report();
+            reporter.close();
+        } else if (format == Format.JSON) {
+            MetricRegistry registry = getConsolidatedRegistry();
+            JSONReporter reporter = JSONReporter.forRegistry(registry)
                     .outputTo(new PrintStream(new WriterOutputStream(printWriter)))
                     .build();
             reporter.report();
@@ -392,7 +396,7 @@ public class MetricWebConsolePlugin extends HttpServlet implements
 
         pw.println("<br>");
         pw.println("<div class='table'>");
-        pw.println("<div class='ui-widget-header ui-corner-top buttonGroup'>Guages</div>");
+        pw.println("<div class='ui-widget-header ui-corner-top buttonGroup'>Gauges</div>");
         pw.println("<table class='nicetable' id='data-guages'>");
         pw.println("<thead>");
         pw.println("<tr>");

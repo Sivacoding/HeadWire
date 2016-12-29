@@ -25,12 +25,10 @@ import javax.jcr.SimpleCredentials;
 
 import org.apache.sling.jcr.api.SlingRepository;
 import org.apache.sling.junit.rules.TeleporterRule;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 
 /** Verify that required system users have been created */
-@Ignore("TODO reactivate once jcr.base 2.3.2 is released")
 public class SystemUsersTest {
 
     @Rule
@@ -56,5 +54,11 @@ public class SystemUsersTest {
         // This user is created by a RepositoryInitalizer in our
         // test-services bundle
         assertSystemUser("launchpad_testing");
+    }
+    
+    @Test
+    public void provisioningModelUser() throws RepositoryException {
+        // This one is created from our provisioning model
+        assertSystemUser("provisioningModelUser");
     }
 }

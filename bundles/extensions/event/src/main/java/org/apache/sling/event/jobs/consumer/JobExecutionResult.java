@@ -18,7 +18,7 @@
  */
 package org.apache.sling.event.jobs.consumer;
 
-import aQute.bnd.annotation.ProviderType;
+import org.osgi.annotation.versioning.ProviderType;
 
 /**
  * The status of a job after it has been processed by a {@link JobExecutor}.
@@ -65,7 +65,7 @@ public interface JobExecutionResult {
 
     /**
      * Return the retry delay in ms
-     * @return The new retry delay (>= 0) or <code>null</code>
+     * @return The new retry delay (&gt;= 0) or <code>null</code>
      */
     Long getRetryDelayInMs();
 }

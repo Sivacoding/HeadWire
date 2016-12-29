@@ -26,7 +26,7 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceUtil;
 
 /**
- * Utility class which used by the Sightly engine &amp; extensions to resolve resources.
+ * Utility class which is used by the HTL engine &amp; extensions to resolve resources.
  */
 public final class ResourceResolution {
 
@@ -92,9 +92,11 @@ public final class ResourceResolution {
             }
             for (String searchPath : resolver.getSearchPath()) {
                 String componentPath = ResourceUtil.normalize(searchPath + "/" + resourceType);
-                Resource componentResource = resolver.getResource(componentPath);
-                if (componentResource != null) {
-                    return componentResource;
+                if (componentPath != null) {
+                    Resource componentResource = resolver.getResource(componentPath);
+                    if (componentResource != null) {
+                        return componentResource;
+                    }
                 }
             }
         }

@@ -22,7 +22,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.ops4j.pax.exam.CoreOptions.bundle;
 import static org.ops4j.pax.exam.CoreOptions.junitBundles;
-import static org.ops4j.pax.exam.CoreOptions.maven;
 import static org.ops4j.pax.exam.CoreOptions.mavenBundle;
 import static org.ops4j.pax.exam.CoreOptions.options;
 import static org.ops4j.pax.exam.CoreOptions.provision;
@@ -84,22 +83,32 @@ public class BindingsValuesProvidersByContextIT {
                 when(localRepo.length() > 0).useOptions(
                         systemProperty("org.ops4j.pax.url.mvn.localRepository").value(localRepo)
                 ),
+                systemProperty("pax.exam.logging").value("none"),
                 provision(
                         bundle(bundleFile.toURI().toString()),
-                        mavenBundle("org.apache.felix", "org.apache.felix.scr", "1.6.2"),
-                        mavenBundle("org.apache.felix", "org.apache.felix.eventadmin", "1.3.2"),
-                        mavenBundle(maven().groupId(FELIX_GID).artifactId("org.apache.felix.webconsole").versionAsInProject()),
 
-                        mavenBundle(maven().groupId(SLING_GID).artifactId("org.apache.sling.scripting.api").versionAsInProject()),
+                        mavenBundle("org.apache.sling", "org.apache.sling.commons.log", "4.0.6"),
+                        mavenBundle("org.apache.sling", "org.apache.sling.commons.logservice", "1.0.6"),
+                        mavenBundle("org.slf4j", "slf4j-api", "1.7.13"),
+                        mavenBundle("org.slf4j", "jcl-over-slf4j", "1.7.13"),
+                        mavenBundle("org.slf4j", "log4j-over-slf4j", "1.7.13"),
 
-                        mavenBundle(maven().groupId(SLING_GID).artifactId("org.apache.sling.commons.threads").versionAsInProject()),
-                        mavenBundle(maven().groupId(SLING_GID).artifactId("org.apache.sling.api").versionAsInProject()),
-                        mavenBundle(maven().groupId(SLING_GID).artifactId("org.apache.sling.commons.mime").versionAsInProject()),
-                        mavenBundle(maven().groupId(SLING_GID).artifactId("org.apache.sling.commons.osgi").versionAsInProject()),
+                        mavenBundle().groupId(FELIX_GID).artifactId("org.apache.felix.scr").versionAsInProject(),
+                        mavenBundle().groupId(FELIX_GID).artifactId("org.apache.felix.eventadmin").versionAsInProject(),
+                        mavenBundle().groupId(FELIX_GID).artifactId("org.apache.felix.webconsole").versionAsInProject(),
 
-                        mavenBundle("org.mortbay.jetty", "servlet-api-2.5", "6.1.14"),
-                        mavenBundle(maven().groupId("commons-io").artifactId("commons-io").versionAsInProject()),
-                        mavenBundle(maven().groupId("commons-lang").artifactId("commons-lang").versionAsInProject())
+                        mavenBundle().groupId(SLING_GID).artifactId("org.apache.sling.scripting.api").versionAsInProject(),
+
+                        mavenBundle().groupId(SLING_GID).artifactId("org.apache.sling.commons.threads").versionAsInProject(),
+                        mavenBundle().groupId(SLING_GID).artifactId("org.apache.sling.api").versionAsInProject(),
+                        mavenBundle().groupId(SLING_GID).artifactId("org.apache.sling.commons.mime").versionAsInProject(),
+                        mavenBundle().groupId(SLING_GID).artifactId("org.apache.sling.commons.osgi").versionAsInProject(),
+
+                        mavenBundle().groupId("javax.servlet").artifactId("javax.servlet-api").versionAsInProject(),
+                        mavenBundle().groupId("commons-io").artifactId("commons-io").versionAsInProject(),
+                        mavenBundle().groupId("commons-lang").artifactId("commons-lang").versionAsInProject(),
+                        mavenBundle().groupId("org.slf4j").artifactId("slf4j-api").versionAsInProject(),
+                        mavenBundle().groupId(SLING_GID).artifactId("org.apache.sling.commons.log").version("4.0.0")
                 ),
                 junitBundles()
         );
@@ -136,6 +145,7 @@ public class BindingsValuesProvidersByContextIT {
                 return id;
             }
 
+            @Override
             public void addBindings(Bindings b) {
             }
         };
@@ -150,6 +160,7 @@ public class BindingsValuesProvidersByContextIT {
                 return id;
             }
 
+            @Override
             public void addBindings(Bindings b) {
             }
         };
@@ -174,52 +185,64 @@ public class BindingsValuesProvidersByContextIT {
     private ScriptEngineFactory factory(final String engineName) {
         return new ScriptEngineFactory() {
 
+            @Override
             public ScriptEngine getScriptEngine() {
                 return null;
             }
 
+            @Override
             public String getProgram(String... arg0) {
                 return null;
             }
 
+            @Override
             public Object getParameter(String arg0) {
                 return null;
             }
 
+            @Override
             public String getOutputStatement(String arg0) {
                 return null;
             }
 
+            @Override
             public List<String> getNames() {
                 final List<String> names = new ArrayList<String>();
                 names.add(engineName);
                 return names;
             }
 
+            @Override
             public List<String> getMimeTypes() {
                 return null;
             }
 
+            @Override
             public String getMethodCallSyntax(String arg0, String arg1, String... arg2) {
                 return null;
             }
 
+            @Override
             public String getLanguageVersion() {
                 return null;
             }
 
+            @Override
             public String getLanguageName() {
                 return null;
             }
 
+            @Override
             public List<String> getExtensions() {
                 return null;
             }
 
+            @Override
             public String getEngineVersion() {
                 return null;
             }
 
+            @Override
             public String getEngineName() {
                 return engineName;
             }

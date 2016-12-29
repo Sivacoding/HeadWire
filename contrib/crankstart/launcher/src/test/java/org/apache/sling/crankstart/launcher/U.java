@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNotNull;
 import java.io.IOException;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -24,7 +25,7 @@ import org.apache.sling.testing.tools.http.RequestExecutor;
 public class U {
     
     public static final String ADMIN = "admin";
-    public static final int LONG_TIMEOUT_SECONDS = 2; // TODO 10
+    public static final int LONG_TIMEOUT_SECONDS = 10;
     public static final int LONG_TIMEOUT_MSEC = LONG_TIMEOUT_SECONDS * 1000;
     public static final int STD_INTERVAL = 250;
     public static final String SLING_API_BUNDLE = "org.apache.sling.api";
@@ -62,6 +63,25 @@ public class U {
         .getContent());
     }
     
+    public static String getContent(HttpResponse response) throws IOException{
+    
+        final HttpEntity e = response.getEntity();
+        if(e == null) {
+            throw new IOException("Response does not provide an Entity");
+        }
+        
+        String encoding = "UTF-8";
+        if(response.getEntity().getContentEncoding() != null) {
+            encoding = response.getEntity().getContentEncoding().getValue();
+        }
+        
+        try {
+            return IOUtils.toString(e.getContent(), encoding);
+        } finally {
+            e.consumeContent();
+        }
+    }
+    
     public static void assertHttpGet(CrankstartSetup C, DefaultHttpClient client, String path, String expectedContent) throws Exception {
         final HttpUriRequest get = new HttpGet(C.getBaseUrl() + path);
         HttpResponse response = null;
@@ -69,11 +89,7 @@ public class U {
             response = client.execute(get);
             assertEquals("Expecting 200 response at " + path, 200, response.getStatusLine().getStatusCode());
             assertNotNull("Expecting response entity", response.getEntity());
-            String encoding = "UTF-8";
-            if(response.getEntity().getContentEncoding() != null) {
-                encoding = response.getEntity().getContentEncoding().getValue();
-            }
-            final String content = IOUtils.toString(response.getEntity().getContent(), encoding);
+            final String content = getContent(response);
             assertEquals(expectedContent, content);
         } finally {
             U.closeConnection(response);

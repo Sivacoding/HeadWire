@@ -20,7 +20,7 @@ package org.apache.sling.event.jobs;
 
 import java.util.Date;
 
-import aQute.bnd.annotation.ProviderType;
+import org.osgi.annotation.versioning.ProviderType;
 
 /**
  * Scheduling information.
@@ -47,6 +47,7 @@ public interface ScheduleInfo {
 
     /**
      * Return the scheduled execution date for a schedule of type date.
+     * @return the scheduled execution date
      */
     Date getAt();
 

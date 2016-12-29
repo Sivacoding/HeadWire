@@ -25,6 +25,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Dictionary;
 import java.util.HashSet;
 import java.util.Hashtable;
@@ -39,6 +40,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.sling.api.request.ResponseUtil;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.api.resource.runtime.RuntimeService;
 import org.apache.sling.api.resource.runtime.dto.ResourceProviderDTO;
 import org.apache.sling.api.resource.runtime.dto.ResourceProviderFailureDTO;
@@ -46,7 +48,7 @@ import org.apache.sling.api.resource.runtime.dto.RuntimeDTO;
 import org.apache.sling.resourceresolver.impl.CommonResourceResolverFactoryImpl;
 import org.apache.sling.resourceresolver.impl.helper.URI;
 import org.apache.sling.resourceresolver.impl.helper.URIException;
-import org.apache.sling.resourceresolver.impl.mapping.MapEntries;
+import org.apache.sling.resourceresolver.impl.mapping.MapEntriesHandler;
 import org.apache.sling.resourceresolver.impl.mapping.MapEntry;
 import org.apache.sling.spi.resource.provider.ResourceProvider;
 import org.osgi.framework.BundleContext;
@@ -119,7 +121,7 @@ public class ResourceResolverWebConsolePlugin extends HttpServlet {
 
         pw.println("<table class='content' cellpadding='0' cellspacing='0' width='100%'>");
 
-        final MapEntries mapEntries = resolverFactory.getMapEntries();
+        final MapEntriesHandler mapEntries = resolverFactory.getMapEntries();
 
         titleHtml(pw, "Configuration", null);
         pw.println("<tr class='content'>");
@@ -218,8 +220,7 @@ public class ResourceResolverWebConsolePlugin extends HttpServlet {
                 HttpServletRequest helper = new ResolverRequest(request, test);
 
                 // get an administrative resource resolver
-                resolver = resolverFactory
-                        .getAdministrativeResourceResolver(null);
+                resolver = resolverFactory.getServiceResourceResolver(Collections.singletonMap(ResourceResolverFactory.SUBSERVICE, (Object)"mapping"));
 
                 // map or resolve as instructed
                 Object result;
@@ -278,7 +279,7 @@ public class ResourceResolverWebConsolePlugin extends HttpServlet {
 
         separatorText(pw);
 
-        final MapEntries mapEntries = resolverFactory.getMapEntries();
+        final MapEntriesHandler mapEntries = resolverFactory.getMapEntries();
 
         dumpMapText(pw, "Resolver Map Entries", mapEntries.getResolveMaps());
 

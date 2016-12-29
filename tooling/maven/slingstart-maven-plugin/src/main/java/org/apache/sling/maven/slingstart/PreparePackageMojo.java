@@ -184,7 +184,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
             // check for web.xml
             final Feature webappF = model.getFeature(ModelConstants.FEATURE_LAUNCHPAD);
             if ( webappF != null ) {
-                final RunMode webappRM = webappF.getRunMode(null);
+                final RunMode webappRM = webappF.getRunMode();
                 if ( webappRM != null ) {
                     final Configuration webConfig = webappRM.getConfiguration(ModelConstants.CFG_LAUNCHPAD_WEB_XML);
                     if ( webConfig != null ) {
@@ -330,7 +330,10 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
         Manifest runModesManifest = getRunModesManifest(feature);
 
         getLog().info("Creating subsystem base file: " + subsystemFile.getName());
-        subsystemFile.getParentFile().mkdirs();
+        boolean created = subsystemFile.getParentFile().mkdirs();
+        if ( !created ) {
+            throw new MojoExecutionException("Failed creating " + subsystemFile.getParentFile().getAbsolutePath());
+        }
 
         try (JarOutputStream os = new JarOutputStream(new FileOutputStream(subsystemFile), runModesManifest)) {
             Map<String, Integer> bsnStartOrderMap = new HashMap<>();
@@ -479,7 +482,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
         final Properties settings = new Properties();
         final Feature launchpadFeature = model.getFeature(ModelConstants.FEATURE_LAUNCHPAD);
         if ( launchpadFeature != null ) {
-            final RunMode launchpadRunMode = launchpadFeature.getRunMode(null);
+            final RunMode launchpadRunMode = launchpadFeature.getRunMode();
             if ( launchpadRunMode != null ) {
                 for(final Map.Entry<String, String> entry : launchpadRunMode.getSettings()) {
                     settings.put(entry.getKey(), deescapeVariablePlaceholders(entry.getValue()));
@@ -488,7 +491,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
         }
         final Feature bootFeature = model.getFeature(ModelConstants.FEATURE_BOOT);
         if ( bootFeature != null ) {
-            final RunMode bootRunMode = bootFeature.getRunMode(null);
+            final RunMode bootRunMode = bootFeature.getRunMode();
             if ( bootRunMode != null ) {
                 for(final Map.Entry<String, String> entry : bootRunMode.getSettings()) {
                     settings.put(entry.getKey(), deescapeVariablePlaceholders(entry.getValue()));
@@ -528,7 +531,7 @@ public class PreparePackageMojo extends AbstractSlingStartMojo {
 
         final Feature launchpadFeature = model.getFeature(ModelConstants.FEATURE_LAUNCHPAD);
         if ( launchpadFeature != null ) {
-            final RunMode launchpadRunMode = launchpadFeature.getRunMode(null);
+            final RunMode launchpadRunMode = launchpadFeature.getRunMode();
             if ( launchpadRunMode != null ) {
                 final Configuration c = launchpadRunMode.getConfiguration(ModelConstants.CFG_LAUNCHPAD_BOOTSTRAP);
                 if ( c != null ) {

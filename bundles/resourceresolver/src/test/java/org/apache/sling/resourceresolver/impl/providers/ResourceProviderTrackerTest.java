@@ -119,7 +119,7 @@ public class ResourceProviderTrackerTest {
             }
 
             @Override
-            public void providerRemoved(String pid) {
+            public void providerRemoved(String name, String pid, boolean stateful, boolean used) {
                 removedCalled.set(true);
             }
 
@@ -177,7 +177,7 @@ public class ResourceProviderTrackerTest {
             }
 
             @Override
-            public void providerRemoved(String pid) {
+            public void providerRemoved(String name, String pid, boolean stateful, boolean used) {
                 removedCalled.set(true);
             }
 
@@ -259,6 +259,10 @@ public class ResourceProviderTrackerTest {
         }
 
         @Override
+        public void reportChanges(ObserverConfiguration config, Iterable<ResourceChange> changes, boolean distribute) {
+        }
+
+        @Override
         public List<ObserverConfiguration> getObserverConfigurations() {
             return Collections.emptyList();
         }
@@ -291,7 +295,7 @@ public class ResourceProviderTrackerTest {
         }
 
         @Override
-        public void providerRemoved(String pid) {
+        public void providerRemoved(String name, String pid, boolean stateful, boolean used) {
             // TODO Auto-generated method stub
 
         }

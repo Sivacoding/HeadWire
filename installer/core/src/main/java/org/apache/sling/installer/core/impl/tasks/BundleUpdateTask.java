@@ -18,13 +18,15 @@
  */
 package org.apache.sling.installer.core.impl.tasks;
 
+import java.text.MessageFormat;
+
 import org.apache.sling.installer.api.tasks.InstallationContext;
 import org.apache.sling.installer.api.tasks.ResourceState;
 import org.apache.sling.installer.api.tasks.TaskResourceGroup;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.Constants;
 import org.osgi.framework.Version;
-import org.osgi.service.startlevel.StartLevel;
+import org.osgi.framework.startlevel.BundleStartLevel;
 
 /** Update a bundle from a RegisteredResource. Creates
  *  a bundleStartTask to restart the bundle if it was
@@ -49,19 +51,21 @@ public class BundleUpdateTask extends AbstractBundleTask {
         if ( BundleUtil.isBundleActive(b) ) {
             return true;
         }
-        final StartLevel startLevelService = this.getStartLevel();
-        return startLevelService.isBundlePersistentlyStarted(b);
+        final BundleStartLevel startLevelService = b.adapt(BundleStartLevel.class);
+        return startLevelService.isPersistentlyStarted();
     }
 
     /**
      * @see org.apache.sling.installer.api.tasks.InstallTask#execute(org.apache.sling.installer.api.tasks.InstallationContext)
      */
+    @Override
     public void execute(final InstallationContext ctx) {
         final String symbolicName = (String)getResource().getAttribute(Constants.BUNDLE_SYMBOLICNAME);
         final Bundle b = BundleInfo.getMatchingBundle(this.getBundleContext(), symbolicName, null);
         if (b == null) {
-            this.getLogger().debug("Bundle to update ({}) not found", symbolicName);
-            this.setFinishedState(ResourceState.IGNORED);
+            String message = MessageFormat.format("Bundle to update ({0}) not found", symbolicName);
+            this.getLogger().debug(message);
+            this.setFinishedState(ResourceState.IGNORED, null, message);
             return;
         }
 
@@ -69,12 +73,13 @@ public class BundleUpdateTask extends AbstractBundleTask {
 
         // Do not update if same version, unless snapshot
         boolean snapshot = false;
-    	final Version currentVersion = new Version((String)b.getHeaders().get(Constants.BUNDLE_VERSION));
+    	final Version currentVersion = new Version(b.getHeaders().get(Constants.BUNDLE_VERSION));
     	snapshot = BundleInfo.isSnapshot(newVersion);
     	if (currentVersion.equals(newVersion) && !snapshot) {
     	    // TODO : Isn't this already checked in the task creator?
-    	    this.getLogger().debug("Same version is already installed, and not a snapshot, ignoring update: {}", getResource());
-    	    this.setFinishedState(ResourceState.INSTALLED);
+    	    String message = MessageFormat.format("Same version is already installed, and not a snapshot, ignoring update: {0}", getResource());
+    	    this.getLogger().debug(message);
+    	    this.setFinishedState(ResourceState.INSTALLED, null, message);
     		return;
     	}
 
@@ -94,14 +99,12 @@ public class BundleUpdateTask extends AbstractBundleTask {
 
             // start level handling - after update to avoid starting the bundle
             // just before the update
-            final StartLevel startLevelService = this.getStartLevel();
-            if ( startLevelService != null ) {
-                final int newStartLevel = this.getBundleStartLevel();
-                final int oldStartLevel = startLevelService.getBundleStartLevel(b);
-                if ( newStartLevel != oldStartLevel && newStartLevel != 0 ) {
-                    startLevelService.setBundleStartLevel(b, newStartLevel);
-                    ctx.log("Set start level for bundle {} to {}", b, newStartLevel);
-                }
+            final BundleStartLevel startLevelService = b.adapt(BundleStartLevel.class);
+            final int newStartLevel = this.getBundleStartLevel();
+            final int oldStartLevel = startLevelService.getStartLevel();
+            if ( newStartLevel != oldStartLevel && newStartLevel != 0 ) {
+                startLevelService.setStartLevel(newStartLevel);
+                ctx.log("Set start level for bundle {} to {}", b, newStartLevel);
             }
 
             if (reactivate) {
@@ -129,8 +132,9 @@ public class BundleUpdateTask extends AbstractBundleTask {
                 this.setFinishedState(ResourceState.INSTALLED);
             }
     	} catch (final Exception e) {
-            this.getLogger().info("Removing failing update task - unable to retry: " + this, e);
-            this.setFinishedState(ResourceState.IGNORED);
+    	    String message = MessageFormat.format("Removing failing update task due to {0} - unable to retry: {1}", e.getLocalizedMessage(), this);
+            this.getLogger().warn(message, e);
+            this.setFinishedState(ResourceState.IGNORED, null, message);
     	}
     }
 

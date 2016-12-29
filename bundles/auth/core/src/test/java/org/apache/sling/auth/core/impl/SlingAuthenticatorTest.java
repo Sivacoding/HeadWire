@@ -18,13 +18,13 @@
  */
 package org.apache.sling.auth.core.impl;
 
+import java.io.UnsupportedEncodingException;
+
 import javax.servlet.http.HttpServletRequest;
 
-import org.apache.sling.auth.core.impl.SlingAuthenticator;
 import org.jmock.Expectations;
 import org.jmock.Mockery;
 import org.jmock.integration.junit4.JUnit4Mockery;
-import org.osgi.service.component.ComponentContext;
 
 import junit.framework.TestCase;
 import junitx.util.PrivateAccessor;
@@ -32,8 +32,8 @@ import junitx.util.PrivateAccessor;
 public class SlingAuthenticatorTest extends TestCase {
 
     private final Mockery context = new JUnit4Mockery();
-    
-    public void test_quoteCookieValue() {
+
+    public void test_quoteCookieValue() throws UnsupportedEncodingException {
 
         try {
             SlingAuthenticator.quoteCookieValue(null);
@@ -44,10 +44,12 @@ public class SlingAuthenticatorTest extends TestCase {
 
         checkQuote("\"", "\"\\\"\"");
         checkQuote("simplevalue", "\"simplevalue\"");
-        checkQuote("simple value", "\"simple value\"");
+        checkQuote("simple value", "\"simple+value\"");
         checkQuote("email@address.com", "\"email@address.com\"");
 
-        checkQuote("string\ttab", "\"string\ttab\"");
+        checkQuote("string\ttab", "\"string%09tab\"");
+        checkQuote("test中文", "\"test%E4%B8%AD%E6%96%87\"");
+
 
         try {
             SlingAuthenticator.quoteCookieValue("string\rCR");
@@ -74,7 +76,7 @@ public class SlingAuthenticatorTest extends TestCase {
         checkUnQuote("\"string\ttab\"", "string\ttab");
     }
 
-    private void checkQuote(final String value, final String expected) {
+    private void checkQuote(final String value, final String expected) throws UnsupportedEncodingException {
         final String actual = SlingAuthenticator.quoteCookieValue(value);
         assertEquals(expected, actual);
     }
@@ -83,15 +85,15 @@ public class SlingAuthenticatorTest extends TestCase {
         final String actual = SlingAuthenticator.unquoteCookieValue(value);
         assertEquals(expected, actual);
     }
-    
+
     //SLING-4864
     public void  test_isAnonAllowed() throws Throwable {
         SlingAuthenticator slingAuthenticator = new SlingAuthenticator();
-        
+
         PathBasedHolderCache<AuthenticationRequirementHolder> authRequiredCache = new PathBasedHolderCache<AuthenticationRequirementHolder>();
-        
+
         authRequiredCache.addHolder(new AuthenticationRequirementHolder("/", false, null));
-        
+
         PrivateAccessor.setField(slingAuthenticator, "authRequiredCache", authRequiredCache);
         final HttpServletRequest request = context.mock(HttpServletRequest.class);
         context.checking(new Expectations() {
@@ -107,10 +109,10 @@ public class SlingAuthenticatorTest extends TestCase {
                 allowing(request).getScheme();
                 will(returnValue("http"));
             }
-        });     
-        
+        });
+
         Boolean allowed = (Boolean) PrivateAccessor.invoke(slingAuthenticator,"isAnonAllowed",  new Class[]{HttpServletRequest.class},new Object[]{request});
         assertTrue(allowed);
     }
-    
+
 }

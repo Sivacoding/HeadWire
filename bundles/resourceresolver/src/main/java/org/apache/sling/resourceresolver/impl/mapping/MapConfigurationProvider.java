@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.sling.api.resource.ResourceResolverFactory;
+import org.apache.sling.api.resource.path.Path;
 
 /**
  * Internal interface representing the additional methods
@@ -32,6 +33,10 @@ public interface MapConfigurationProvider extends ResourceResolverFactory {
 
     String getMapRoot();
 
+    boolean isMapConfiguration(String path);
+
+    Path[] getObservationPaths();
+
     Map<?, ?> getVirtualURLMap();
 
     Mapping[] getMappings();
@@ -39,15 +44,15 @@ public interface MapConfigurationProvider extends ResourceResolverFactory {
     int getDefaultVanityPathRedirectStatus();
 
     boolean isVanityPathEnabled();
-    
+
     long getMaxCachedVanityPathEntries();
-    
+
     boolean isMaxCachedVanityPathEntriesStartup();
-    
+
     int getVanityBloomFilterMaxBytes();
 
     boolean isOptimizeAliasResolutionEnabled();
-    
+
     boolean hasVanityPathPrecedence();
 
     public class VanityPathConfig implements Comparable<VanityPathConfig> {
@@ -59,6 +64,7 @@ public interface MapConfigurationProvider extends ResourceResolverFactory {
             this.isExclude = isExclude;
         }
 
+        @Override
         public int compareTo(VanityPathConfig o2) {
             return new Integer(o2.prefix.length()).compareTo(this.prefix.length());
         }

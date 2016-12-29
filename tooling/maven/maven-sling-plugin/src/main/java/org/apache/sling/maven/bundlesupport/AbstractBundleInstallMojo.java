@@ -20,7 +20,6 @@ package org.apache.sling.maven.bundlesupport;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -33,7 +32,6 @@ import org.apache.commons.httpclient.Credentials;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpStatus;
-import org.apache.commons.httpclient.NameValuePair;
 import org.apache.commons.httpclient.UsernamePasswordCredentials;
 import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.methods.FileRequestEntity;
@@ -50,13 +48,11 @@ import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
-import org.apache.sling.api.resource.ResourceUtil;
 import org.apache.sling.commons.json.JSONArray;
 import org.apache.sling.commons.json.JSONException;
 import org.apache.sling.commons.json.JSONObject;
 import org.apache.sling.commons.osgi.ManifestHeader;
 import org.apache.sling.commons.osgi.ManifestHeader.Entry;
-import org.codehaus.plexus.util.StringUtils;
 
 abstract class AbstractBundleInstallMojo extends AbstractBundlePostMojo {
 
@@ -684,8 +680,10 @@ abstract class AbstractBundleInstallMojo extends AbstractBundlePostMojo {
         post.addParameter("factoryPid", FS_FACTORY);
         post.addParameter("pid", "[Temporary PID replaced by real PID upon save]");
         post.addParameter("provider.file", dir);
+        // save property value to both "provider.roots" and "provider.root" because the name has changed since fsresource 1.1.6
+        post.addParameter("provider.root", path);
         post.addParameter("provider.roots", path);
-        post.addParameter("propertylist", "provider.roots,provider.file");
+        post.addParameter("propertylist", "provider.root,provider.roots,provider.file");
         try {
             final int status = client.executeMethod(post);
             // we get a moved temporarily back from the configMgr plugin
@@ -741,9 +739,15 @@ abstract class AbstractBundleInstallMojo extends AbstractBundlePostMojo {
                         final JSONObject obj = array.getJSONObject(i);
                         final String pid = obj.getString("pid");
                         final JSONObject properties = obj.getJSONObject("properties");
-                        final String path = properties.getJSONObject("provider.file").getString("value");
-                        final String roots = properties.getJSONObject("provider.roots").getString("value");
-                        if ( path != null && path.startsWith(this.project.getBasedir().getAbsolutePath()) ) {
+                        final String path = properties.getJSONObject("provider.file").optString("value");
+                        final String roots;
+                        if (properties.has("provider.roots")) {
+                            roots = properties.getJSONObject("provider.roots").optString("value");
+                        }
+                        else {
+                            roots = properties.getJSONObject("provider.root").optString("value");
+                        }
+                        if ( path != null && path.startsWith(this.project.getBasedir().getAbsolutePath()) && roots != null ) {
                             getLog().debug("Found configuration with pid: " + pid + ", path: " + path + ", roots: " + roots);
                             result.put(pid, new String[] {path, roots});
                         }

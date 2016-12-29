@@ -60,6 +60,7 @@ public class ResourceResolverFactoryImpl implements ResourceResolverFactory {
     /**
      * @see org.apache.sling.api.resource.ResourceResolverFactory#getServiceResourceResolver(java.util.Map)
      */
+    @Override
     public ResourceResolver getServiceResourceResolver(final Map<String, Object> passedAuthenticationInfo) throws LoginException {
         // create a copy of the passed authentication info as we modify the map
         final Map<String, Object> authenticationInfo = new HashMap<String, Object>();
@@ -94,6 +95,7 @@ public class ResourceResolverFactoryImpl implements ResourceResolverFactory {
     /**
      * @see org.apache.sling.api.resource.ResourceResolverFactory#getResourceResolver(java.util.Map)
      */
+    @Override
     public ResourceResolver getResourceResolver(
             final Map<String, Object> authenticationInfo) throws LoginException {
         return commonFactory.getResourceResolver(authenticationInfo);
@@ -102,14 +104,25 @@ public class ResourceResolverFactoryImpl implements ResourceResolverFactory {
     /**
      * @see org.apache.sling.api.resource.ResourceResolverFactory#getAdministrativeResourceResolver(java.util.Map)
      */
+    @Override
+    @SuppressWarnings("deprecation")
     public ResourceResolver getAdministrativeResourceResolver(
-            final Map<String, Object> authenticationInfo) throws LoginException {
+            Map<String, Object> authenticationInfo) throws LoginException {
+        // usingBundle is required as bundles must now be whitelisted to use this method
+        if(usingBundle == null) {
+            throw new LoginException("usingBundle is null");
+        }
+        if(authenticationInfo == null) {
+            authenticationInfo = new HashMap<String, Object>();
+        }
+        authenticationInfo.put(ResourceProvider.AUTH_SERVICE_BUNDLE, this.usingBundle);
         return commonFactory.getAdministrativeResourceResolver(authenticationInfo);
     }
 
     /**
      * @see org.apache.sling.api.resource.ResourceResolverFactory#getThreadResourceResolver()
      */
+    @Override
     public ResourceResolver getThreadResourceResolver() {
         return commonFactory.getThreadResourceResolver();
     }

@@ -33,10 +33,15 @@ import org.apache.jackrabbit.vault.packaging.Packaging;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.commons.osgi.PropertiesUtil;
 import org.apache.sling.distribution.DistributionRequestType;
+import org.apache.sling.distribution.agent.DistributionAgent;
 import org.apache.sling.distribution.component.impl.DistributionComponentConstants;
 import org.apache.sling.distribution.component.impl.SettingsUtils;
 import org.apache.sling.distribution.event.impl.DistributionEventFactory;
 import org.apache.sling.distribution.log.impl.DefaultDistributionLog;
+import org.apache.sling.distribution.monitor.impl.MonitoringDistributionQueueProvider;
+import org.apache.sling.distribution.monitor.impl.QueueDistributionAgentMBean;
+import org.apache.sling.distribution.monitor.impl.QueueDistributionAgentMBeanImpl;
+import org.apache.sling.distribution.packaging.DistributionPackageBuilder;
 import org.apache.sling.distribution.packaging.DistributionPackageExporter;
 import org.apache.sling.distribution.packaging.impl.exporter.LocalDistributionPackageExporter;
 import org.apache.sling.distribution.queue.DistributionQueueProvider;
@@ -44,18 +49,17 @@ import org.apache.sling.distribution.queue.impl.DistributionQueueDispatchingStra
 import org.apache.sling.distribution.queue.impl.PriorityQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.SingleQueueDispatchingStrategy;
 import org.apache.sling.distribution.queue.impl.jobhandling.JobHandlingDistributionQueueProvider;
-import org.apache.sling.distribution.serialization.DistributionPackageBuilder;
-import org.apache.sling.distribution.serialization.impl.DefaultSharedDistributionPackageBuilder;
 import org.apache.sling.distribution.trigger.DistributionTrigger;
 import org.apache.sling.event.jobs.JobManager;
 import org.apache.sling.jcr.api.SlingRepository;
 import org.apache.sling.settings.SlingSettingsService;
 import org.osgi.framework.BundleContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * An OSGi service factory for {@link org.apache.sling.distribution.agent.DistributionAgent}s which references already existing OSGi services.
+ * An OSGi service factory for "queuing agents" that queue resources from the local instance (and can be eventually
+ * pulled from another remote "reverse agent").
+ *
+ * @see {@link org.apache.sling.distribution.agent.DistributionAgent}
  */
 @Component(metatype = true,
         label = "Apache Sling Distribution Agent - Queue Agents Factory",
@@ -68,8 +72,7 @@ import org.slf4j.LoggerFactory;
         policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_MULTIPLE,
         bind = "bindDistributionTrigger", unbind = "unbindDistributionTrigger")
 @Property(name="webconsole.configurationFactory.nameHint", value="Agent name: {name}")
-public class QueueDistributionAgentFactory extends AbstractDistributionAgentFactory {
-    private final Logger log = LoggerFactory.getLogger(getClass());
+public class QueueDistributionAgentFactory extends AbstractDistributionAgentFactory<QueueDistributionAgentMBean> {
 
     @Property(label = "Name", description = "The name of the agent.")
     public static final String NAME = DistributionComponentConstants.PN_NAME;
@@ -139,6 +142,10 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
     @Reference
     private SlingRepository slingRepository;
 
+    public QueueDistributionAgentFactory() {
+        super(QueueDistributionAgentMBean.class);
+    }
+
     @Activate
     protected void activate(BundleContext context, Map<String, Object> config) {
         super.activate(context, config);
@@ -170,7 +177,8 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
         priorityQueues = SettingsUtils.removeEmptyEntries(priorityQueues);
 
 
-        DistributionQueueProvider queueProvider = new JobHandlingDistributionQueueProvider(agentName, jobManager, context);
+        DistributionQueueProvider queueProvider = new MonitoringDistributionQueueProvider(new JobHandlingDistributionQueueProvider(agentName, jobManager, context), context);
+
         DistributionQueueDispatchingStrategy exportQueueStrategy = null;
 
 
@@ -180,7 +188,7 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
             exportQueueStrategy = new SingleQueueDispatchingStrategy();
         }
 
-        DistributionPackageExporter packageExporter = new LocalDistributionPackageExporter(new DefaultSharedDistributionPackageBuilder(packageBuilder));
+        DistributionPackageExporter packageExporter = new LocalDistributionPackageExporter(packageBuilder);
         DistributionRequestType[] allowedRequests = new DistributionRequestType[]{DistributionRequestType.ADD, DistributionRequestType.DELETE};
 
         return new SimpleDistributionAgent(agentName, false, null,
@@ -188,4 +196,10 @@ public class QueueDistributionAgentFactory extends AbstractDistributionAgentFact
                 queueProvider, exportQueueStrategy, null, distributionEventFactory, resourceResolverFactory, slingRepository,
                 distributionLog, allowedRequests, allowedRoots, 0);
     }
+
+    @Override
+    protected QueueDistributionAgentMBean createMBeanAgent(DistributionAgent agent, Map<String, Object> osgiConfiguration) {
+        return new QueueDistributionAgentMBeanImpl(agent, osgiConfiguration);
+    }
+
 }

@@ -485,7 +485,7 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
             while (path != null) {
                 String alias = null;
                 if (current != null && !path.endsWith(JCR_CONTENT_LEAF)) {
-                    if (factory.getMapEntries().isOptimizeAliasResolutionEnabled()) {
+                    if (factory.isOptimizeAliasResolutionEnabled()) {
                         logger.debug("map: Optimize Alias Resolution is Enabled");
                         String parentPath = ResourceUtil.getParent(path);
                         if (parentPath != null) {
@@ -916,11 +916,23 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
 
         } else {
 
+            String tokenizedPath = absPath;
+
             // no direct resource found, so we have to drill down into the
             // resource tree to find a match
             resource = getAbsoluteResourceInternal(null, "/", parameters, true);
+
+            //no read access on / drilling further down
+            //SLING-5638
+            if (resource == null) {
+                resource = getAbsoluteResourceInternal(absPath, parameters, true);
+                if (resource != null) {
+                    tokenizedPath = tokenizedPath.substring(resource.getPath().length());
+                }
+            }
+
             final StringBuilder resolutionPath = new StringBuilder();
-            final StringTokenizer tokener = new StringTokenizer(absPath, "/");
+            final StringTokenizer tokener = new StringTokenizer(tokenizedPath, "/");
             while (resource != null && tokener.hasMoreTokens()) {
                 final String childNameRaw = tokener.nextToken();
 
@@ -993,7 +1005,7 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
 
         // we do not have a child with the exact name, so we look for
         // a child, whose alias matches the childName
-        if (factory.getMapEntries().isOptimizeAliasResolutionEnabled()){
+        if (factory.isOptimizeAliasResolutionEnabled()){
             logger.debug("getChildInternal: Optimize Alias Resolution is Enabled");
             //optimization made in SLING-2521
             final Map<String, String> aliases = factory.getMapEntries().getAliasMap(parent.getPath());
@@ -1061,6 +1073,32 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
 
         logger.debug("getResourceInternal: Cannot resolve path '{}' to a resource", path);
         return null;
+    }
+
+    /**
+     * Creates a resource, traversing bottom up, to the highest readable resource.
+     *
+     */
+    private Resource getAbsoluteResourceInternal(String absPath, final Map<String, String> parameters, final boolean isResolved) {
+
+        if (!absPath.contains("/") || "/".equals(absPath)) {
+            return null;
+        }
+
+        absPath = absPath.substring(absPath.indexOf("/"));
+        Resource resource = getAbsoluteResourceInternal(null, absPath, parameters, isResolved);
+
+        absPath = absPath.substring(0, absPath.lastIndexOf("/"));
+
+        while (!absPath.equals("")) {
+            Resource r = getAbsoluteResourceInternal(null, absPath, parameters, true);
+
+            if (r != null) {
+                resource = r;
+            }
+            absPath = absPath.substring(0, absPath.lastIndexOf("/"));
+        }
+        return resource;
     }
 
     /**
@@ -1273,13 +1311,13 @@ public class ResourceResolverImpl extends SlingAdaptable implements ResourceReso
              // Check if the resource is of the given type. This method first checks the
              // resource type of the resource, then its super resource type and continues
              //  to go up the resource super type hierarchy.
-             if (resourceType.equals(resource.getResourceType())) {
+             if (ResourceTypeUtil.areResourceTypesEqual(resourceType, resource.getResourceType(), getSearchPath())) {
                  result = true;
              } else {
                  Set<String> superTypesChecked = new HashSet<String>();
                  String superType = this.getParentResourceType(resource);
                  while (!result && superType != null) {
-                     if (resourceType.equals(superType)) {
+                     if (ResourceTypeUtil.areResourceTypesEqual(resourceType, superType, getSearchPath())) {
                          result = true;
                      } else {
                          superTypesChecked.add(superType);

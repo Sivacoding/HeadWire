@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -53,6 +54,8 @@ import org.apache.sling.resourceresolver.impl.providers.ResourceProviderStorageP
 import org.apache.sling.resourceresolver.impl.providers.stateful.AuthenticatedResourceProvider;
 import org.apache.sling.resourceresolver.impl.providers.tree.Node;
 import org.apache.sling.spi.resource.provider.ResourceProvider;
+import org.osgi.framework.Bundle;
+import org.osgi.framework.FrameworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +71,10 @@ public class ResourceResolverControl {
 
     private static final Logger logger = LoggerFactory.getLogger(ResourceResolverControl.class);
 
-    private static final String FORBIDDEN_ATTRIBUTE = ResourceResolverFactory.PASSWORD;
+    private static final String[] FORBIDDEN_ATTRIBUTES = new String[] {
+            ResourceResolverFactory.PASSWORD,
+            ResourceProvider.AUTH_SERVICE_BUNDLE,
+            ResourceResolverFactory.SUBSERVICE};
 
     /** Is this a resource resolver for an admin? */
     private final boolean isAdmin;
@@ -329,7 +335,9 @@ public class ResourceResolverControl {
         if ( this.authenticationInfo != null ) {
             names.addAll(authenticationInfo.keySet());
         }
-        names.remove(FORBIDDEN_ATTRIBUTE);
+        for(final String key : FORBIDDEN_ATTRIBUTES) {
+            names.remove(key);
+        }
         return names;
     }
 
@@ -339,8 +347,10 @@ public class ResourceResolverControl {
      * the providers.
      */
     public Object getAttribute(final ResourceResolverContext context, final String name) {
-        if (FORBIDDEN_ATTRIBUTE.equals(name)) {
-            return null;
+        for(final String key : FORBIDDEN_ATTRIBUTES) {
+            if (key.equals(name)) {
+                return null;
+            }
         }
         for (final AuthenticatedResourceProvider p : context.getProviderManager().getAllBestEffort(getResourceProviderStorage().getAttributableHandlers(), this)) {
             final Object attribute = p.getAttribute(name);
@@ -677,7 +687,6 @@ public class ResourceResolverControl {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private ResourceResolver getResourceTypeResourceResolver(
             final ResourceResolverFactory factory,
             final ResourceResolver resolver) {
@@ -686,9 +695,15 @@ public class ResourceResolverControl {
         } else {
             if ( this.resourceTypeResourceResolver == null ) {
                 try {
-                    this.resourceTypeResourceResolver = factory.getAdministrativeResourceResolver(null);
+                    // make sure we're getting the resourceTypeResourceResolver on behalf of
+                    // the resourceresolver bundle
+                    final Bundle bundle = FrameworkUtil.getBundle(ResourceResolverControl.class);
+                    final Map<String, Object> authenticationInfo = new HashMap<String, Object>();
+                    authenticationInfo.put(ResourceProvider.AUTH_SERVICE_BUNDLE, bundle);
+                    authenticationInfo.put(ResourceResolverFactory.SUBSERVICE, "read");
+                    this.resourceTypeResourceResolver = factory.getServiceResourceResolver(authenticationInfo);
                 } catch (final LoginException e) {
-                    // we simply ignore this and return null
+                    throw new IllegalStateException("Failed to create resource-type ResourceResolver", e);
                 }
             }
             return this.resourceTypeResourceResolver;

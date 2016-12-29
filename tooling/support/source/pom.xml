@@ -69,9 +69,12 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
         </dependency>
+        <!-- override version to OSGi 4.3.0 to support BundleRevision -->
         <dependency>
             <groupId>org.osgi</groupId>
             <artifactId>org.osgi.core</artifactId>
+            <!-- use the Java 7 compliant dependency: http://blog.osgi.org/2012/10/43-companion-code-for-java-7.html -->
+            <version>4.3.1</version>
         </dependency>
         <dependency>
             <groupId>org.osgi</groupId>

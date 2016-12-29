@@ -24,11 +24,9 @@ import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import java.io.IOException;
-
 import org.apache.sling.api.adapter.AdapterFactory;
 import org.apache.sling.api.adapter.SlingAdaptable;
-import org.apache.sling.api.resource.PersistenceException;
+import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.junit.Before;
@@ -43,17 +41,29 @@ import com.google.common.collect.ImmutableMap;
 @RunWith(MockitoJUnitRunner.class)
 public class SlingContextTest {
 
-    private final SlingContextCallback contextSetup = mock(SlingContextCallback.class);
-    private final SlingContextCallback contextTeardown = mock(SlingContextCallback.class);
+    private final SlingContextCallback contextBeforeSetup = mock(SlingContextCallback.class);
+    private final SlingContextCallback contextAfterSetup = mock(SlingContextCallback.class);
+    private final SlingContextCallback contextBeforeTeardown = mock(SlingContextCallback.class);
+    private final SlingContextCallback contextAfterTeardown = mock(SlingContextCallback.class);
 
     // Run all unit tests for each resource resolver types listed here
     @Rule
-    public SlingContext context = new SlingContext(contextSetup, contextTeardown,
-            ResourceResolverType.RESOURCERESOLVER_MOCK);
+    public SlingContext context = new SlingContextBuilder(ResourceResolverType.JCR_MOCK)
+        .beforeSetUp(contextBeforeSetup)
+        .afterSetUp(contextAfterSetup)
+        .beforeTearDown(contextBeforeTeardown)
+        .afterTearDown(contextAfterTeardown)
+        .resourceResolverFactoryActivatorProps(ImmutableMap.<String, Object>of("resource.resolver.searchpath", new String[] {
+            "/apps",
+            "/libs",
+            "/testpath",
+        }))
+        .build();
 
     @Before
-    public void setUp() throws IOException, PersistenceException {
-        verify(contextSetup).execute(context);
+    public void setUp() throws Exception {
+        verify(contextBeforeSetup).execute(context);
+        verify(contextAfterSetup).execute(context);
     }
 
     @Test
@@ -61,6 +71,26 @@ public class SlingContextTest {
         assertNotNull(context.request());
     }
 
+    /**
+     * Test if custom searchpath /testpath added in this SlingContext is handled correctly.
+     */
+    @Test
+    public void testResourceResolverFactoryActivatorProps() {
+      context.create().resource("/apps/node1");
+
+      context.create().resource("/libs/node1");
+      context.create().resource("/libs/node2");
+
+      context.create().resource("/testpath/node1");
+      context.create().resource("/testpath/node2");
+      context.create().resource("/testpath/node3");
+
+      assertEquals("/apps/node1", context.resourceResolver().getResource("node1").getPath());
+      assertEquals("/libs/node2", context.resourceResolver().getResource("node2").getPath());
+      assertEquals("/testpath/node3", context.resourceResolver().getResource("node3").getPath());
+      assertNull(context.resourceResolver().getResource("node4"));
+    }
+    
     @Test
     public void testRegisterAdapter() {
         
@@ -80,8 +110,49 @@ public class SlingContextTest {
     }
 
     @Test
-    public void testRegisterAdapterOverlay() {
+    public void testRegisterAdapterOverlayStatic() {
+        prepareInitialAdapterFactory();
         
+        // register overlay adapter with static adaption
+        context.registerAdapter(TestAdaptable.class, String.class, "static-adaption");
+
+        // test overlay adapter with static adaption
+        assertEquals("static-adaption", new TestAdaptable("testMessage2").adaptTo(String.class));
+    }
+
+    @Test
+    public void testRegisterAdapterOverlayDynamic() {
+        prepareInitialAdapterFactory();
+        
+        // register overlay adapter with dynamic adaption
+        context.registerAdapter(TestAdaptable.class, String.class, new Function<TestAdaptable, String>() {
+            @Override
+            public String apply(TestAdaptable input) {
+                return input.getMessage() + "-dynamic";
+            }
+        });
+
+        // test overlay adapter with dynamic adaption
+        assertEquals("testMessage3-dynamic", new TestAdaptable("testMessage3").adaptTo(String.class));
+    }
+    
+    @Test
+    public void testResourceBuilder() {
+        
+        context.build().resource("/test1", "prop1", "value1")
+            .siblingsMode()
+            .resource("a")
+            .resource("b");
+        
+        Resource test1 = context.resourceResolver().getResource("/test1");
+        assertNotNull(test1);
+        assertEquals("value1", test1.getValueMap().get("prop1", String.class));
+        assertNotNull(test1.getChild("a"));
+        assertNotNull(test1.getChild("b"));
+    }
+    
+    
+    private void prepareInitialAdapterFactory() {
         // register "traditional" adapter factory without specific service ranking
         AdapterFactory adapterFactory = new AdapterFactory() {
             @SuppressWarnings("unchecked")
@@ -96,24 +167,7 @@ public class SlingContextTest {
                 .build());
         
         // test initial adapter factory
-        assertEquals("testMessage1-initial", new TestAdaptable("testMessage1").adaptTo(String.class));
-        
-        // register overlay adapter with static adaption
-        context.registerAdapter(TestAdaptable.class, String.class, "static-adaption");
-
-        // test overlay adapter with static adaption
-        assertEquals("static-adaption", new TestAdaptable("testMessage2").adaptTo(String.class));
-
-        // register overlay adapter with dynamic adaption
-        context.registerAdapter(TestAdaptable.class, String.class, new Function<TestAdaptable, String>() {
-            @Override
-            public String apply(TestAdaptable input) {
-                return input.getMessage() + "-dynamic";
-            }
-        });
-
-        // test overlay adapter with dynamic adaption
-        assertEquals("testMessage3-dynamic", new TestAdaptable("testMessage3").adaptTo(String.class));
+        assertEquals("testMessage1-initial", new TestAdaptable("testMessage1").adaptTo(String.class));        
     }
 
 

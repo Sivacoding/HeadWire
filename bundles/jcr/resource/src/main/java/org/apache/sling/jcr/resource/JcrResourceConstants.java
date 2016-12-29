@@ -22,7 +22,10 @@ import org.apache.sling.api.SlingConstants;
 
 /**
  * The <code>JcrResourceConstants</code> interface provides constant values.
+ *
+ * @deprecated Use org.apache.sling.jcr.resource.api.JcrResourceConstants instead.
  */
+@Deprecated
 public class JcrResourceConstants {
 
     /**

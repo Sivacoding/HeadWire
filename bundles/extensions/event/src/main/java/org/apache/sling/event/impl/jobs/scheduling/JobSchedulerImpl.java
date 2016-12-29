@@ -27,11 +27,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.sling.api.SlingConstants;
 import org.apache.sling.api.resource.ModifiableValueMap;
 import org.apache.sling.api.resource.PersistenceException;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.resource.observation.ExternalResourceChangeListener;
+import org.apache.sling.api.resource.observation.ResourceChange;
+import org.apache.sling.api.resource.observation.ResourceChangeListener;
 import org.apache.sling.commons.scheduler.JobContext;
 import org.apache.sling.commons.scheduler.ScheduleOptions;
 import org.apache.sling.commons.scheduler.Scheduler;
@@ -47,7 +49,6 @@ import org.apache.sling.event.jobs.ScheduleInfo;
 import org.apache.sling.event.jobs.ScheduleInfo.ScheduleType;
 import org.apache.sling.event.jobs.ScheduledJobInfo;
 import org.osgi.service.event.Event;
-import org.osgi.service.event.EventHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +61,8 @@ import org.slf4j.LoggerFactory;
  * the events to this service.
  */
 public class JobSchedulerImpl
-    implements EventHandler,
-               ConfigurationChangeListener,
+    implements ConfigurationChangeListener,
+               ResourceChangeListener, ExternalResourceChangeListener,
                org.apache.sling.commons.scheduler.Job {
 
     private static final String PROPERTY_READ_JOB = "properties";
@@ -191,7 +192,7 @@ public class JobSchedulerImpl
     }
 
     /**
-     * Remove a scheduled job
+     * Unschedule a scheduled job
      */
     public void unscheduleJob(final ScheduledJobInfoImpl info) {
         synchronized ( this.scheduledJobs ) {
@@ -199,6 +200,14 @@ public class JobSchedulerImpl
                 this.stopScheduledJob(info);
             }
         }
+    }
+
+    /**
+     * Remove a scheduled job
+     */
+    public void removeJob(final ScheduledJobInfoImpl info) {
+        this.unscheduleJob(info);
+        this.scheduledJobHandler.remove(info);
     }
 
     /**
@@ -253,7 +262,8 @@ public class JobSchedulerImpl
      * @param info The scheduling info
      */
     private void stopScheduledJob(final ScheduledJobInfoImpl info) {
-        if ( this.active.get() ) {
+        final Scheduler localScheduler = this.scheduler;
+        if ( localScheduler != null ) {
             this.configuration.getAuditLogger().debug("SCHEDULED STOP name={}, topic={}, properties={} : {}",
                     new Object[] {info.getName(),
                                   info.getJobTopic(),
@@ -261,7 +271,7 @@ public class JobSchedulerImpl
                                   info.getSchedules()});
             for(int index = 0; index<info.getSchedules().size(); index++) {
                 final String name = info.getSchedulerJobId() + "-" + String.valueOf(index);
-                this.scheduler.unschedule(name);
+                localScheduler.unschedule(name);
             }
         }
     }
@@ -271,6 +281,10 @@ public class JobSchedulerImpl
      */
     @Override
     public void execute(final JobContext context) {
+        if ( !active.get() ) {
+            // not active anymore, simply return
+            return;
+        }
         final ScheduledJobInfoImpl info = (ScheduledJobInfoImpl) context.getConfiguration().get(PROPERTY_READ_JOB);
 
         if ( info.isSuspended() ) {
@@ -306,23 +320,10 @@ public class JobSchedulerImpl
     /**
      * @see org.osgi.service.event.EventHandler#handleEvent(org.osgi.service.event.Event)
      */
-    @Override
     public void handleEvent(final Event event) {
         if ( ResourceHelper.BUNDLE_EVENT_STARTED.equals(event.getTopic())
              || ResourceHelper.BUNDLE_EVENT_UPDATED.equals(event.getTopic()) ) {
             this.scheduledJobHandler.bundleEvent();
-        } else {
-            // resource event
-            final String path = (String)event.getProperty(SlingConstants.PROPERTY_PATH);
-            if ( path != null && path.startsWith(this.configuration.getScheduledJobsPath(true)) ) {
-                if ( SlingConstants.TOPIC_RESOURCE_REMOVED.equals(event.getTopic()) ) {
-                    // removal
-                    this.scheduledJobHandler.handleRemove(path);
-                } else {
-                    // add or update
-                    this.scheduledJobHandler.handleAddUpdate(path);
-                }
-            }
         }
     }
 
@@ -541,5 +542,25 @@ public class JobSchedulerImpl
 
     public void maintenance() {
         this.scheduledJobHandler.maintenance();
+    }
+
+    /**
+     * @see org.apache.sling.api.resource.observation.ResourceChangeListener#onChange(java.util.List)
+     */
+    @Override
+    public void onChange(List<ResourceChange> changes) {
+        for(final ResourceChange change : changes ) {
+            if ( change.getPath() != null && change.getPath().startsWith(this.configuration.getScheduledJobsPath(true)) ) {
+                if ( change.getType() == ResourceChange.ChangeType.REMOVED ) {
+                    // removal
+                    logger.debug("Remove scheduled job {}", change.getPath());
+                    this.scheduledJobHandler.handleRemove(change.getPath());
+                } else {
+                    // add or update
+                    logger.debug("Add or update scheduled job {}, event {}", change.getPath(), change.getType());
+                    this.scheduledJobHandler.handleAddUpdate(change.getPath());
+                }
+            }
+        }
     }
 }

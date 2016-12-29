@@ -26,7 +26,7 @@ import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 
-import aQute.bnd.annotation.ProviderType;
+import org.osgi.annotation.versioning.ProviderType;
 
 /**
  * The <code>ServletResolver</code> defines the API for a service capable of
@@ -36,7 +36,6 @@ import aQute.bnd.annotation.ProviderType;
  * Applications of the Sling Framework generally do not need the servlet
  * resolver as resolution of the servlets to process requests and sub-requests
  * through a <code>RequestDispatcher</code> is handled by the Sling Framework.
- * <p>
  */
 @ProviderType
 public interface ServletResolver {
@@ -62,7 +61,7 @@ public interface ServletResolver {
      * @throws org.apache.sling.api.SlingException Is thrown if an error occurs
      *             while trying to find an appropriate servlet to handle the
      *             request.
-     * @Throws NullPointerException If {@code request} is null.
+     * @throws NullPointerException If {@code request} is null.
      */
     @CheckForNull Servlet resolveServlet(@Nonnull SlingHttpServletRequest request);
 

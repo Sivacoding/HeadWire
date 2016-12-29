@@ -46,8 +46,9 @@ public class ClientSideTeleporter extends TeleporterRule {
 
     public static final String DEFAULT_TEST_SERVLET_PATH = "system/sling/junit";
     private DependencyAnalyzer dependencyAnalyzer;
-    private int testReadyTimeoutSeconds = 5;
+    private int testReadyTimeoutSeconds = 20;
     private int webConsoleReadyTimeoutSeconds = 30;
+    private int waitForServiceTimout = 10;
     private String baseUrl;
     private String serverCredentials;
     private String testServletPath = DEFAULT_TEST_SERVLET_PATH;
@@ -58,6 +59,7 @@ public class ClientSideTeleporter extends TeleporterRule {
         final TinyBundle b = TinyBundles.bundle()
             .set(Constants.BUNDLE_SYMBOLICNAME, bundleSymbolicName)
             .set("Sling-Test-Regexp", c.getName() + ".*")
+            .set("Sling-Test-WaitForService-Timeout", Integer.toString(waitForServiceTimout))
             .add(c);
 
         for(Map.Entry<String, String> header : additionalBundleHeaders.entrySet()) {
@@ -110,20 +112,28 @@ public class ClientSideTeleporter extends TeleporterRule {
         webConsoleReadyTimeoutSeconds = tm;
     }
     
+    /**
+     * Define how long to wait to get a service reference.
+     * This applies only on the server-side when using the {@link #getService(Class)} or {@link #getService(Class, String)} methods.
+     */
+    public void setWaitForServiceTimoutSeconds (int tm) {
+        waitForServiceTimout = tm;
+    }
+    
     /** Set the credentials to use to install our test bundle on the server */
     public void setServerCredentials(String username, String password) {
         serverCredentials = username + ":" + password;
     }
     
     /**
-	 * @param testServletPath relative path to the Sling JUnit test servlet. 
-	 *     If null, defaults to DEFAULT_TEST_SERVLET_PATH.
-	 */
-	public void setTestServletPath(String testServletPath) {
-		this.testServletPath = testServletPath == null ? DEFAULT_TEST_SERVLET_PATH : testServletPath;
-	}
+     * @param testServletPath
+     *            relative path to the Sling JUnit test servlet. If null, defaults to DEFAULT_TEST_SERVLET_PATH.
+     */
+    public void setTestServletPath(String testServletPath) {
+        this.testServletPath = testServletPath == null ? DEFAULT_TEST_SERVLET_PATH : testServletPath;
+    }
 
-	/** Define a prefix for class names that can be embedded
+    /** Define a prefix for class names that can be embedded
      *  in the test bundle if the {@link DependencyAnalyzer} thinks
      *  they should. Overridden by {@link #excludeDependencyPrefix } if
      *  any conflicts arise.
@@ -199,7 +209,7 @@ public class ClientSideTeleporter extends TeleporterRule {
                 try {
                     httpClient.runTests(testPath, testReadyTimeoutSeconds);
                 } finally {
-                    httpClient.uninstallBundle(bundleSymbolicName);
+                    httpClient.uninstallBundle(bundleSymbolicName, webConsoleReadyTimeoutSeconds);
                 }
             }
         };

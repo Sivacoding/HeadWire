@@ -29,7 +29,7 @@
 
     <artifactId>org.apache.sling.servlets.get</artifactId>
     <packaging>bundle</packaging>
-    <version>2.1.15-SNAPSHOT</version>
+    <version>2.1.19-SNAPSHOT</version>
 
     <name>Apache Sling Default GET Servlets</name>
     <description>
@@ -62,8 +62,16 @@
                         <Private-Package>
                             org.apache.sling.servlets.get.*
                         </Private-Package>
-
                     </instructions>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <excludePackageNames>
+                        org.apache.sling.servlets.get.impl
+                    </excludePackageNames>
                 </configuration>
             </plugin>
         </plugins>

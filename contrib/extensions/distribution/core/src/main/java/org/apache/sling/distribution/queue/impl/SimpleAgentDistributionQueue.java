@@ -22,17 +22,11 @@ package org.apache.sling.distribution.queue.impl;
 import org.apache.sling.distribution.queue.DistributionQueue;
 import org.apache.sling.distribution.queue.DistributionQueueState;
 import org.apache.sling.distribution.queue.DistributionQueueStatus;
+import org.apache.sling.distribution.queue.DistributionQueueType;
 
 import javax.annotation.Nonnull;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class SimpleAgentDistributionQueue extends DistributionQueueWrapper {
-    // cache status for 5 sec as it is expensive to count items
-    private static final int EXPIRY_QUEUE_CACHE = 5 * 1000;
-
-    static Map<String, DistributionQueueStatus> queueCache = new ConcurrentHashMap<String, DistributionQueueStatus>();
-    static Map<String, Long> queueCacheExpiry = new ConcurrentHashMap<String, Long>();
 
     private final boolean isPaused;
     private final String agentName;
@@ -46,35 +40,16 @@ public class SimpleAgentDistributionQueue extends DistributionQueueWrapper {
     @Nonnull
     @Override
     public DistributionQueueStatus getStatus() {
-        return getCachedStatus();
+        return calculateStatus();
     }
 
-    private DistributionQueueStatus getCachedStatus() {
+    @Override
+    public DistributionQueueType getType() {
+        return wrappedQueue.getType();
+    }
 
-        DistributionQueueStatus queueStatus = null;
-        String cacheKey = agentName + "/" + wrappedQueue.getName();
-        long now = System.currentTimeMillis();
-
-        Long expiryDate = queueCacheExpiry.get(cacheKey);
-        if (expiryDate != null && expiryDate < now) {
-            queueCache.remove(cacheKey);
-            queueCacheExpiry.remove(cacheKey);
-        }
-
-        queueStatus = queueCache.get(cacheKey);
-
-        if (queueStatus != null) {
-            return queueStatus;
-        }
-
-        queueStatus = calculateStatus();
-
-        if (queueStatus != null) {
-            queueCache.put(cacheKey, queueStatus);
-            queueCacheExpiry.put(cacheKey,  System.currentTimeMillis() + EXPIRY_QUEUE_CACHE);
-        }
-
-        return queueStatus;
+    public String getAgentName() {
+        return agentName;
     }
 
     private DistributionQueueStatus calculateStatus() {

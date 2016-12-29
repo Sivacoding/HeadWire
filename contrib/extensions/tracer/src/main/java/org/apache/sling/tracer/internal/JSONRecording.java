@@ -33,8 +33,10 @@ import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -53,6 +55,8 @@ import org.slf4j.helpers.FormattingTuple;
 import org.slf4j.helpers.MessageFormatter;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static org.apache.sling.tracer.internal.Util.nullSafeString;
+import static org.apache.sling.tracer.internal.Util.nullSafeTrim;
 
 class JSONRecording implements Recording, Comparable<JSONRecording> {
     private static final String[] QUERY_API_PKGS = {
@@ -68,6 +72,7 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
     private final boolean compress;
     private final List<QueryEntry> queries = new ArrayList<QueryEntry>();
     private final List<LogEntry> logs = new ArrayList<LogEntry>();
+    private final Set<String> loggerNames = new HashSet<String>();
     private RequestProgressTracker tracker;
     private byte[] json;
     private final long start = System.currentTimeMillis();
@@ -137,6 +142,11 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
         this.tracker = tracker;
     }
 
+    @Override
+    public void recordCategory(String loggerName) {
+        loggerNames.add(loggerName);
+    }
+
     public void done() {
         try {
             if (json == null) {
@@ -179,10 +189,22 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
         addJson(jw, "queries", queries);
 
         addJson(jw, "logs", logs);
+        addLoggerNames(jw);
         jw.endObject();
         osw.flush();
         os.close();
         return baos.toByteArray();
+    }
+
+    private void addLoggerNames(JSONWriter jw) throws JSONException {
+        List<String> sortedNames = new ArrayList<String>(loggerNames);
+        Collections.sort(sortedNames);
+        jw.key("loggerNames");
+        jw.array();
+        for (String o : sortedNames) {
+            jw.value(o);
+        }
+        jw.endArray();
     }
 
     private void addRequestProgressLogs(JSONWriter jw) throws JSONException {
@@ -239,6 +261,7 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
         final Level level;
         final String logger;
         final FormattingTuple tuple;
+        final String[] params;
         final long timestamp = System.currentTimeMillis();
         final List<StackTraceElement> caller;
 
@@ -246,6 +269,7 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
             this.level = level != null ? level : Level.INFO;
             this.logger = logger;
             this.tuple = tuple;
+            this.params = getParams(tuple);
             this.caller = getCallerData(tc);
         }
 
@@ -254,6 +278,20 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
                 return tc.getCallerReporter().report();
             }
             return Collections.emptyList();
+        }
+
+        private static String[] getParams(FormattingTuple tuple) {
+            //Eagerly convert arg to string so that if arg is bound by context like
+            //session then it gets evaluated when that is valid i.e. at time of call itself
+            Object[] params = tuple.getArgArray();
+            String[] strParams = null;
+            if (params != null){
+                strParams = new String[params.length];
+                for (int i = 0; i < params.length; i++) {
+                    strParams[i] = toString(params[i]);
+                }
+            }
+            return strParams;
         }
 
         private static String toString(Object o) {
@@ -274,12 +312,11 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
             jw.key("logger").value(logger);
             jw.key("message").value(tuple.getMessage());
 
-            Object[] params = tuple.getArgArray();
             if (params != null) {
                 jw.key("params");
                 jw.array();
-                for (Object o : params) {
-                    jw.value(toString(o));
+                for (String o : params) {
+                    jw.value(o);
                 }
                 jw.endArray();
             }
@@ -387,20 +424,6 @@ class JSONRecording implements Recording, Comparable<JSONRecording> {
             //Push any last pending entry i.e. last query
             attemptQueryEntry();
         }
-    }
-
-    private static String nullSafeTrim(String s){
-        if(s == null){
-            return "";
-        }
-        return s.trim();
-    }
-
-    private static String nullSafeString(Object o){
-        if (o != null){
-            return o.toString();
-        }
-        return null;
     }
 
 }

@@ -24,7 +24,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 
 import org.apache.sling.distribution.agent.DistributionAgent;
@@ -34,7 +33,7 @@ import org.apache.sling.distribution.component.impl.DistributionComponentKind;
 import org.apache.sling.distribution.component.impl.DistributionComponentProvider;
 import org.apache.sling.distribution.log.DistributionLog;
 import org.apache.sling.distribution.queue.impl.ErrorQueueDispatchingStrategy;
-import org.apache.sling.distribution.serialization.DistributionPackageInfo;
+import org.apache.sling.distribution.packaging.DistributionPackageInfo;
 import org.apache.sling.distribution.packaging.impl.DistributionPackageUtils;
 import org.apache.sling.distribution.queue.DistributionQueue;
 import org.apache.sling.distribution.queue.DistributionQueueEntry;
@@ -67,9 +66,9 @@ public class ExtendedDistributionServiceResourceProvider extends DistributionSer
 
 
     @Override
-    protected Map<String, Object> getChildResourceProperties(DistributionComponent component, String childResourceName) {
+    protected Map<String, Object> getChildResourceProperties(DistributionComponent<?> component, String childResourceName) {
         DistributionComponentKind kind = component.getKind();
-        if (kind.equals(DistributionComponentKind.AGENT)) {
+        if (DistributionComponentKind.AGENT == kind) {
             DistributionAgent agent = (DistributionAgent) component.getService();
 
             if (agent != null && childResourceName != null) {
@@ -98,10 +97,10 @@ public class ExtendedDistributionServiceResourceProvider extends DistributionSer
     }
 
     @Override
-    protected Iterable<String> getChildResourceChildren(DistributionComponent component, String childResourceName) {
+    protected Iterable<String> getChildResourceChildren(DistributionComponent<?> component, String childResourceName) {
 
         DistributionComponentKind kind = component.getKind();
-        if (kind.equals(DistributionComponentKind.AGENT)) {
+        if (DistributionComponentKind.AGENT == kind) {
             DistributionAgent agent = (DistributionAgent) component.getService();
 
             if (agent != null) {
@@ -150,9 +149,10 @@ public class ExtendedDistributionServiceResourceProvider extends DistributionSer
                 }
 
                 List<String> nameList = new ArrayList<String>();
+
                 DistributionQueueEntry entry = queue.getHead();
                 if (entry != null) {
-                    nameList.add(entry.getItem().getId());
+                    nameList.add(entry.getId());
                 }
 
                 result.put(ITEMS, nameList.toArray(new String[nameList.size()]));
@@ -194,7 +194,8 @@ public class ExtendedDistributionServiceResourceProvider extends DistributionSer
             DistributionQueueItem item = entry.getItem();
             DistributionPackageInfo packageInfo = DistributionPackageUtils.fromQueueItem(item);
 
-            result.put("id", item.getId());
+            result.put("id", entry.getId());
+            result.put("size", item.getSize());
             result.put("paths", packageInfo.getPaths());
             result.put("action", packageInfo.getRequestType());
             result.put("userid", packageInfo.get(DistributionPackageUtils.PACKAGE_INFO_PROPERTY_REQUEST_USER, String.class));
@@ -234,14 +235,13 @@ public class ExtendedDistributionServiceResourceProvider extends DistributionSer
                 items = queue.getItems(fetched, MAX_QUEUE_CHUNK).iterator();
             }
 
-            boolean hasNext = items.hasNext();
-            return hasNext;
+            return items.hasNext();
         }
 
         @Override
         public Map<String, Object> next() {
             DistributionQueueEntry queueEntry = items.next();
-            String itemName = queueEntry.getItem().getId();
+            String itemName = queueEntry.getId();
             Map<String, Object> itemProperties = getItemProperties(queueEntry);
             itemProperties.put(INTERNAL_NAME, itemName);
 

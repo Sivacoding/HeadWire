@@ -47,12 +47,14 @@ import org.apache.felix.scr.annotations.sling.SlingFilter;
 import org.apache.felix.scr.annotations.sling.SlingFilterScope;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.wrappers.SlingHttpServletRequestWrapper;
+import org.apache.sling.commons.osgi.Order;
 import org.apache.sling.commons.osgi.ServiceUtil;
 import org.apache.sling.i18n.DefaultLocaleResolver;
 import org.apache.sling.i18n.LocaleResolver;
 import org.apache.sling.i18n.RequestLocaleResolver;
 import org.apache.sling.i18n.ResourceBundleProvider;
 import org.osgi.framework.Constants;
+import org.osgi.service.http.whiteboard.HttpWhiteboardConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,10 +65,17 @@ import org.slf4j.LoggerFactory;
 @SlingFilter(generateService = true,
              order = 700, scope = { SlingFilterScope.REQUEST, SlingFilterScope.ERROR })
 @Properties({
-    @Property(name = "pattern", value="/.*"),
+    @Property(name = HttpWhiteboardConstants.HTTP_WHITEBOARD_FILTER_PATTERN, value="/"),
+    @Property(name = HttpWhiteboardConstants.HTTP_WHITEBOARD_CONTEXT_SELECT,
+              value = "(" + HttpWhiteboardConstants.HTTP_WHITEBOARD_CONTEXT_NAME + "=*)"),
     @Property(name = Constants.SERVICE_DESCRIPTION, value = "Internationalization Support Filter"),
     @Property(name = Constants.SERVICE_VENDOR, value = "The Apache Software Foundation") })
 public class I18NFilter implements Filter {
+
+    /**
+     * The default server default locale if not configured <code>Locale.ENGLISH</code>.
+     */
+    private static final Locale DEFAULT_LOCALE = Locale.ENGLISH;
 
     /** Logger */
     private final static Logger LOG = LoggerFactory.getLogger(I18NFilter.class.getName());
@@ -163,14 +172,14 @@ public class I18NFilter implements Filter {
 
     protected void bindResourceBundleProvider(final ResourceBundleProvider provider, final Map<String, Object> props) {
         synchronized ( this.providers ) {
-            this.providers.put(ServiceUtil.getComparableForServiceRanking(props), provider);
+            this.providers.put(ServiceUtil.getComparableForServiceRanking(props, Order.ASCENDING), provider);
             this.sortedProviders = this.providers.values().toArray(new ResourceBundleProvider[this.providers.size()]);
         }
     }
 
     protected void unbindResourceBundleProvider(final ResourceBundleProvider provider, final Map<String, Object> props) {
         synchronized ( this.providers ) {
-            this.providers.remove(ServiceUtil.getComparableForServiceRanking(props));
+            this.providers.remove(ServiceUtil.getComparableForServiceRanking(props, Order.ASCENDING));
             this.sortedProviders = this.providers.values().toArray(new ResourceBundleProvider[this.providers.size()]);
         }
     }
@@ -223,6 +232,11 @@ public class I18NFilter implements Filter {
         }
     }
 
+    private static Locale defaultLocale(ResourceBundleProvider bundleProvider) {
+        Locale defaultLocale = bundleProvider.getDefaultLocale();
+        return (defaultLocale != null) ? defaultLocale : DEFAULT_LOCALE;
+    }
+
     // ---------- internal class -----------------------------------------------
 
     private static class I18NHttpServletRequest
@@ -256,7 +270,7 @@ public class I18NFilter implements Filter {
         }
 
         @Override
-        public Enumeration<?> getLocales() {
+        public Enumeration<Locale> getLocales() {
             return Collections.enumeration(getLocaleList());
         }
 
@@ -276,7 +290,7 @@ public class I18NFilter implements Filter {
                 List<Locale> resolved = localeResolver.resolveLocale((HttpServletRequest)this.getRequest());
                 this.localeList = (resolved != null && !resolved.isEmpty())
                         ? resolved
-                        : Collections.singletonList(this.bundleProvider.getDefaultLocale());
+                        : Collections.singletonList(defaultLocale(this.bundleProvider));
             }
 
             return localeList;
@@ -357,7 +371,7 @@ public class I18NFilter implements Filter {
         }
 
         @Override
-        public Enumeration<?> getLocales() {
+        public Enumeration<Locale> getLocales() {
             return Collections.enumeration(getLocaleList());
         }
 
@@ -366,7 +380,7 @@ public class I18NFilter implements Filter {
                 List<Locale> resolved = localeResolver.resolveLocale(this.getSlingRequest());
                 this.localeList = (resolved != null && !resolved.isEmpty())
                         ? resolved
-                        : Collections.singletonList(this.bundleProvider.getDefaultLocale());
+                        : Collections.singletonList(defaultLocale(this.bundleProvider));
             }
 
             return localeList;
